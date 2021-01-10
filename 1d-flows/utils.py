@@ -4,6 +4,7 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
 
+from scipy.stats import norm
 
 import matplotlib.pyplot as plt
 
@@ -52,6 +53,48 @@ def plot_train_test_reconstructions(model, X_train_tensor, X_train_data, X_test_
 
         train_squared_error = mean_squared_error(X_data[:len(preds)], preds) * len(preds)
         print('MSE : ' + str(np.round(train_squared_error,3)))
+        
+        
+def plot_train_test_reconstructions_prob_decoder_model(model, X_train_tensor, X_train_data, X_test_tensor,X_test_data):
+    for X_tensor, X_data in [(X_train_tensor,X_train_data),(X_test_tensor,X_test_data)]:
+        X_tensor = X_tensor.cuda()if torch.cuda.is_available() else X_tensor.cpu()
+        X_tensor.to(device)
+        out_pred, rec_mu, rec_sigma, _ = model(X_tensor)
+        out_pred = out_pred.cpu().detach().numpy()
+        print(out_pred.shape, rec_mu.shape, rec_sigma.shape)
+        probs = []
+        for i in range(rec_mu.shape[0]):
+            for j in range(rec_mu.shape[2]):
+                probs.append(norm.pdf(X_tensor[i,0,j].item(),rec_mu[i,0,j].item(),np.exp(rec_sigma[i,0,j].cpu().item())))
+
+        plt.figure(figsize=(20,6))
+        plt.plot(probs)
+        plt.show()
+
+        idx = 0
+        preds = []
+        mu = []
+        sigma = []
+        for i in range(len(out_pred)):
+            for j in out_pred[i,0]:
+                preds.append(j)
+            for j in rec_mu[i,0]:
+                mu.append(j.item())
+            for j in rec_sigma[i,0]:
+                sigma.append(j.item())
+
+        plt.figure(figsize=(20,6))
+        plt.plot(X_data,label='real')
+        plt.plot(mu,label='rec_mu',alpha=0.5)
+        plt.fill_between(np.arange(len(mu)),np.array(mu)-np.exp(np.array(sigma)),np.array(mu)+np.exp(np.array(sigma)),alpha=0.2)
+        plt.legend()
+        plt.show()
+        
+
+        train_squared_error = mean_squared_error(X_data[:len(preds)], preds) * len(preds)
+        print('MSE : ' + str(np.round(train_squared_error,3)))
+
+
 
 def get_taxi_data_VAE(path, window_size, train_test_split=.5):
     window=window_size

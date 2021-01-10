@@ -29,20 +29,22 @@ class CNN_sigmaVAE(nn.Module):
         
         
         self.conv1 = nn.Conv1d(in_channels=1, out_channels=8, kernel_size=5, stride=1, padding=0)
+        self.bn1 = nn.BatchNorm1d(8)
         self.conv2 = nn.Conv1d(in_channels=8, out_channels=16, kernel_size=5, stride=1, padding=0)
+        self.bn2 = nn.BatchNorm1d(16)
         self.conv3 = nn.Conv1d(in_channels=16, out_channels=4, kernel_size=5, stride=1, padding=0)
+        self.bn3 = nn.BatchNorm1d(4)
+        
+        
+        self.fc41 = nn.Linear(4*20, self.latent_dim)
+        self.fc42 = nn.Linear(4*20, self.latent_dim)
 
-        #self.fc41 = nn.Linear(4*8, self.latent_dim)
-        #self.fc42 = nn.Linear(4*8, self.latent_dim)
-        #self.defc1 = nn.Linear(self.latent_dim, 4*8)
-        
-        self.fc41 = nn.Linear(4*116, self.latent_dim)
-        self.fc42 = nn.Linear(4*116, self.latent_dim)
-        self.defc1 = nn.Linear(self.latent_dim, 4*116)
-        
+        self.defc1 = nn.Linear(self.latent_dim, 4*20)
         
         self.deconv1 = nn.ConvTranspose1d(in_channels=4, out_channels=16, kernel_size=5, stride=1, padding=0, output_padding=0)
+        self.debn1 = nn.BatchNorm1d(16)
         self.deconv2 = nn.ConvTranspose1d(in_channels=16, out_channels=8, kernel_size=5, stride=1, padding=0, output_padding=0)
+        self.debn2 = nn.BatchNorm1d(8)
         self.deconv3 = nn.ConvTranspose1d(in_channels=8, out_channels=1, kernel_size=5, stride=1, padding=0, output_padding=0)
 
         self.log_sigma = 0
@@ -58,15 +60,14 @@ class CNN_sigmaVAE(nn.Module):
         
     def encoder(self, x):
         concat_input = x #torch.cat([x, c], 1)
-        h = F.relu(self.conv1(concat_input))
-        h = F.relu(self.conv2(h))
-        h = F.relu(self.conv3(h))
-
+        h = self.bn1(F.relu(self.conv1(concat_input)))
+        h = self.bn2(F.relu(self.conv2(h)))
+        h = self.bn3(F.relu(self.conv3(h)))
         
         self.saved_dim = [h.size(1), h.size(2)]
         
         h = h.view(h.size(0), h.size(1) * h.size(2))
-        
+
         return self.fc41(h), self.fc42(h)
     
     
@@ -79,10 +80,9 @@ class CNN_sigmaVAE(nn.Module):
         concat_input = z #torch.cat([z, c], 1)
         concat_input = self.defc1(concat_input)
         concat_input = concat_input.view(concat_input.size(0), self.saved_dim[0], self.saved_dim[1])
-        
-        h = F.relu(self.deconv1(concat_input))
-        h = F.relu(self.deconv2(h))
-        
+
+        h = self.debn1(F.relu(self.deconv1(concat_input)))
+        h = self.debn2(F.relu(self.deconv2(h)))     
         out = torch.sigmoid(self.deconv3(h))
         
         if self.prob_decoder:
