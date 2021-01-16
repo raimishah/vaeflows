@@ -201,8 +201,6 @@ def get_taxi_data_cVAE(path, window_size, cond_window_size, train_test_split=.5)
     print(X_train_tensor.shape, cond_train_tensor.shape)
 
     #Make test data
-    window=20
-
     X_test = []
     cond_test = []
 
@@ -211,7 +209,7 @@ def get_taxi_data_cVAE(path, window_size, cond_window_size, train_test_split=.5)
 
     for i in range(0, X_test_data.shape[0]-conditional_window-window+1, conditional_window):
         X_test.append([X_test_data[i+conditional_window:i+conditional_window+window]])
-        cond_test.append([X[i:i+conditional_window]])
+        cond_test.append([X_test_data[i:i+conditional_window]])
 
     X_test = np.array(X_test)
     cond_test = np.array(cond_test)
