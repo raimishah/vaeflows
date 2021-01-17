@@ -23,12 +23,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 
-class CNN_sigmaVAE_flow(nn.Module):
+class CNN_sigmacVAE_flow(nn.Module):
 
-    def __init__(self,latent_dim=8, window_size=20, use_probabilistic_decoder=False, flow_type = 'MAF'):
-        super(CNN_sigmaVAE_flow, self).__init__()
+    def __init__(self,latent_dim=8, window_size=20, cond_window_size=10, use_probabilistic_decoder=False, flow_type = 'MAF'):
+        super(CNN_sigmacVAE_flow, self).__init__()
         
         self.window_size=window_size
+        self.cond_window_size=cond_window_size
         self.latent_dim = latent_dim
         self.prob_decoder = use_probabilistic_decoder
         self.flow_type=flow_type
@@ -40,10 +41,10 @@ class CNN_sigmaVAE_flow(nn.Module):
         self.conv3 = nn.Conv1d(in_channels=16, out_channels=4, kernel_size=6, stride=1, padding=0)
         self.bn3 = nn.BatchNorm1d(4)
 
-        self.fc41 = nn.Linear(4*8, self.latent_dim)
-        self.fc42 = nn.Linear(4*8, self.latent_dim)
+        self.fc41 = nn.Linear(4*15, self.latent_dim)
+        self.fc42 = nn.Linear(4*15, self.latent_dim)
 
-        self.defc1 = nn.Linear(self.latent_dim, 4*8)
+        self.defc1 = nn.Linear(self.latent_dim + self.cond_window_size, 4*15)
         
         self.deconv1 = nn.ConvTranspose1d(in_channels=4, out_channels=16, kernel_size=2, stride=1, padding=0, output_padding=0)
         self.debn1 = nn.BatchNorm1d(16)
@@ -63,8 +64,8 @@ class CNN_sigmaVAE_flow(nn.Module):
             self.flow = MAF(n_blocks=1, input_size=self.latent_dim, hidden_size=50, n_hidden=1)
         
         
-    def encoder(self, x):
-        concat_input = x #torch.cat([x, c], 1)
+    def encoder(self, x, c):
+        concat_input = torch.cat([x, c], 2)
         h = self.bn1(F.relu(self.conv1(concat_input)))
         h = self.bn2(F.relu(self.conv2(h)))
         h = self.bn3(F.relu(self.conv3(h)))
@@ -81,19 +82,20 @@ class CNN_sigmaVAE_flow(nn.Module):
         eps = torch.randn_like(std)
         return eps.mul(std).add(mu) # return z sample
     
-    def decoder(self, z):
-        concat_input = z #torch.cat([z, c], 1)
+    def decoder(self, z, c):
+        c = c.view(c.size(0), -1)
+        concat_input = torch.cat([z, c], 1)
         concat_input = self.defc1(concat_input)
         concat_input = concat_input.view(concat_input.size(0), self.saved_dim[0], self.saved_dim[1])
+
         
         h = self.debn1(F.relu(self.deconv1(concat_input)))
-        h = self.debn2(F.relu(self.deconv2(h)))    
-        
+        h = self.debn2(F.relu(self.deconv2(h)))     
         out = torch.sigmoid(self.deconv3(h))
         
         if self.prob_decoder:
-            rec_mu = self.decoder_fc41(out).tanh()
-            rec_sigma = self.decoder_fc42(out).tanh()
+            rec_mu = self.decoder_fc43(out).tanh()
+            rec_sigma = self.decoder_fc44(out).tanh()
             return out, rec_mu, rec_sigma
         
         #else:
@@ -117,19 +119,14 @@ class CNN_sigmaVAE_flow(nn.Module):
         return zk, loss
     
  
-    def forward(self, x):
+    def forward(self, x, c):
         
-        #mu, log_var = self.encoder(x)
-        #z = self.sampling(mu, log_var)
-        #output = self.decoder(z)
-        #return output, mu, log_var
-        
-        z_params = self.encoder(x)
+        z_params = self.encoder(x, c)
         mu, log_var = z_params
         
         z_k, kl = self.latent_not_planar(x, z_params)
         
-        output, rec_mu, rec_sigma = self.decoder(z_k)
+        output, rec_mu, rec_sigma = self.decoder(z_k, c)
    
         return output, rec_mu, rec_sigma, kl
         
