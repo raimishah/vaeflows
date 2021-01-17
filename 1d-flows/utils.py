@@ -37,8 +37,7 @@ def plot_train_test_reconstructions(model, X_train_tensor, X_train_data, X_test_
         X_tensor.to(device)
         out_pred, _,_,_= model(X_tensor)
         out_pred = out_pred.cpu().detach().numpy()
-        print(out_pred.shape)
-
+        
         idx = 0
         preds = []
         for i in range(len(out_pred)):
@@ -51,8 +50,60 @@ def plot_train_test_reconstructions(model, X_train_tensor, X_train_data, X_test_
         plt.legend()
         plt.show()
 
-        train_squared_error = mean_squared_error(X_data[:len(preds)], preds) * len(preds)
+        train_squared_error = mean_squared_error(X_data[:len(preds)], preds)
         print('MSE : ' + str(np.round(train_squared_error,3)))
+
+
+
+def plot_train_test_reconstructions_cvae(model, X_train_tensor, X_train_data, X_test_tensor, X_test_data, cond_train_tensor, cond_test_tensor, window_size, cond_window_size):
+    torch.no_grad()
+    
+    #train data
+    output, _,_,_= model(X_train_tensor, cond_train_tensor)
+    output = output.cpu().detach().numpy()
+    print(output.shape)
+
+    idx = 0
+    preds = []
+    for i in range(len(output)):
+        for j in output[i,0, :cond_window_size]:
+            preds.append(j)
+    
+    plt.figure(figsize=(30,9))
+    plt.plot(X_train_data[cond_window_size:-cond_window_size],label='real')
+    plt.plot(preds,label='pred')
+    plt.legend()
+
+    plt.show()
+    
+    train_squared_error = mean_squared_error(X_train_data[cond_window_size:-cond_window_size], preds) * len(preds)
+
+    
+    #test data
+
+    output, _,_,_= model(X_test_tensor, cond_test_tensor)
+    output = output.detach().numpy()
+    print(output.shape)
+
+    idx = 0
+    preds = []
+    for i in range(len(output)):
+        for j in output[i,0, :cond_window_size]:
+            preds.append(j)
+
+
+
+    plt.figure(figsize=(30,9))
+    plt.plot(X_test_data[:-cond_window_size],label='real')
+    plt.plot(preds,label='pred')
+    plt.legend()
+
+    plt.show()
+
+    
+    test_squared_error = mean_squared_error(X_test_data[:-cond_window_size], preds) * len(preds)
+
+    print('train MSE : ' + str(np.round(train_squared_error,3)) + ' test MSE : ' + str(np.round(test_squared_error,3)))
         
         
 def plot_train_test_reconstructions_prob_decoder_model(model, X_train_tensor, X_train_data, X_test_tensor,X_test_data):
@@ -61,7 +112,6 @@ def plot_train_test_reconstructions_prob_decoder_model(model, X_train_tensor, X_
         X_tensor.to(device)
         out_pred, rec_mu, rec_sigma, _ = model(X_tensor)
         out_pred = out_pred.cpu().detach().numpy()
-        print(out_pred.shape, rec_mu.shape, rec_sigma.shape)
         probs = []
         for i in range(rec_mu.shape[0]):
             for j in range(rec_mu.shape[2]):
@@ -91,8 +141,96 @@ def plot_train_test_reconstructions_prob_decoder_model(model, X_train_tensor, X_
         plt.show()
         
 
-        train_squared_error = mean_squared_error(X_data[:len(preds)], preds) * len(preds)
+        train_squared_error = mean_squared_error(X_data[:len(preds)], preds)
         print('MSE : ' + str(np.round(train_squared_error,3)))
+
+
+
+
+
+def plot_train_test_reconstructions_prob_decoder_cvae_model(model, X_train_tensor, X_train_data, X_test_tensor, X_test_data, cond_train_tensor, cond_test_tensor, window_size, cond_window_size):
+    torch.no_grad()
+
+    X_train_tensor = X_train_tensor.cuda() if torch.cuda.is_available() else X_train_tensor.cpu()
+    X_train_tensor.to(device)
+    X_test_tensor = X_test_tensor.cuda() if torch.cuda.is_available() else X_test_tensor.cpu()
+    X_test_tensor.to(device)
+    cond_train_tensor = cond_train_tensor.cuda() if torch.cuda.is_available() else cond_train_tensor.cpu()
+    cond_train_tensor.to(device)
+    cond_test_tensor = cond_test_tensor.cuda() if torch.cuda.is_available() else cond_test_tensor.cpu()
+    cond_test_tensor.to(device)
+    
+    #train data
+    out_pred, rec_mu, rec_sigma, _ = model(X_train_tensor, cond_train_tensor)
+    out_pred = out_pred.cpu().detach().numpy()
+    probs = []
+    
+    for i in range(rec_mu.shape[0]):
+        for j in range(0, cond_window_size):
+            probs.append(norm.pdf(X_train_tensor[i,0,j].item(),rec_mu[i,0,j].item(),np.exp(rec_sigma[i,0,j].cpu().item())))
+
+    plt.figure(figsize=(20,6))
+    plt.plot(probs)
+    plt.show()
+    
+    idx = 0
+    preds = []
+    mu = []
+    sigma = []
+    
+    for i in range(len(out_pred)):
+        for j in range(cond_window_size):
+            preds.append(out_pred[i,0,j].item())
+            mu.append(rec_mu[i,0,j].item())
+            sigma.append(rec_sigma[i,0,j].item())
+
+    plt.figure(figsize=(20,6))
+    plt.plot(X_train_data,label='real')
+    plt.plot(mu,label='rec_mu',alpha=0.5)
+    plt.fill_between(np.arange(len(mu)),np.array(mu)-np.exp(np.array(sigma)),np.array(mu)+np.exp(np.array(sigma)),alpha=0.2)
+    plt.legend()
+    plt.show()
+    
+    train_squared_error = mean_squared_error(X_train_data[cond_window_size:-cond_window_size], preds) * len(preds)
+
+    
+    #test data
+    out_pred, rec_mu, rec_sigma, _ = model(X_test_tensor, cond_test_tensor)
+    out_pred = out_pred.cpu().detach().numpy()
+    probs = []
+    for i in range(rec_mu.shape[0]):
+        for j in range(cond_window_size):
+            probs.append(norm.pdf(X_test_tensor[i,0,j].item(),rec_mu[i,0,j].item(),np.exp(rec_sigma[i,0,j].cpu().item())))
+
+    plt.figure(figsize=(20,6))
+    plt.plot(probs)
+    plt.show()
+    
+    idx = 0
+    preds = []
+    mu = []
+    sigma = []
+    for i in range(len(out_pred)):
+        for j in range(cond_window_size):
+            preds.append(out_pred[i,0,j].item())
+            mu.append(rec_mu[i,0,j].item())
+            sigma.append(rec_sigma[i,0,j].item())
+        
+    plt.figure(figsize=(20,6))
+    plt.plot(X_test_data,label='real')
+    plt.plot(mu,label='rec_mu',alpha=0.5)
+    plt.fill_between(np.arange(len(mu)),np.array(mu)-np.exp(np.array(sigma)),np.array(mu)+np.exp(np.array(sigma)),alpha=0.2)
+    plt.legend()
+    plt.show()
+
+    test_squared_error = mean_squared_error(X_test_data[:-cond_window_size], preds) * len(preds)
+
+    print('train MSE : ' + str(np.round(train_squared_error,3)) + ' test MSE : ' + str(np.round(test_squared_error,3)))
+
+    
+
+
+
 
 
 
@@ -131,8 +269,6 @@ def get_taxi_data_VAE(path, window_size, train_test_split=.5):
     train = torch.utils.data.TensorDataset(X_train_tensor, Y_train_tensor)
     trainloader = torch.utils.data.DataLoader(train, batch_size=100, shuffle=False)
 
-    print(X_train_tensor.shape, Y_train_tensor.shape)
-
 
     #Make test data
     window=window_size
@@ -153,8 +289,6 @@ def get_taxi_data_VAE(path, window_size, train_test_split=.5):
 
     test = torch.utils.data.TensorDataset(X_test_tensor, Y_test_tensor)
     testloader = torch.utils.data.DataLoader(test, batch_size=100, shuffle=False)
-
-    print(X_test_tensor.shape, Y_test_tensor.shape)
     
     return X_train_data, X_test_data, X_train_tensor, X_test_tensor, trainloader, testloader
 
@@ -198,8 +332,6 @@ def get_taxi_data_cVAE(path, window_size, cond_window_size, train_test_split=.5)
     train = torch.utils.data.TensorDataset(X_train_tensor, cond_train_tensor)
     trainloader = torch.utils.data.DataLoader(train, batch_size=100, shuffle=False)
 
-    print(X_train_tensor.shape, cond_train_tensor.shape)
-
     #Make test data
     X_test = []
     cond_test = []
@@ -225,7 +357,5 @@ def get_taxi_data_cVAE(path, window_size, cond_window_size, train_test_split=.5)
 
     test = torch.utils.data.TensorDataset(X_test_tensor, cond_test_tensor)
     testloader = torch.utils.data.DataLoader(test, batch_size=100, shuffle=False)
-
-    print(X_test_tensor.shape, cond_test_tensor.shape)
     
     return X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, trainloader, testloader
