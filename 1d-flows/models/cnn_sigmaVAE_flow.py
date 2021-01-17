@@ -16,7 +16,7 @@ from torchvision import transforms
 
 from utils import softclip
 
-from maf import MAF
+from maf import MAF, RealNVP
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -37,10 +37,10 @@ class CNN_sigmaVAE_flow(nn.Module):
         self.conv2 = nn.Conv1d(in_channels=8, out_channels=16, kernel_size=5, stride=1, padding=0)
         self.conv3 = nn.Conv1d(in_channels=16, out_channels=4, kernel_size=5, stride=1, padding=0)
 
-        self.fc41 = nn.Linear(4*20, self.latent_dim)
-        self.fc42 = nn.Linear(4*20, self.latent_dim)
+        self.fc41 = nn.Linear(4*8, self.latent_dim)
+        self.fc42 = nn.Linear(4*8, self.latent_dim)
 
-        self.defc1 = nn.Linear(self.latent_dim, 4*20)
+        self.defc1 = nn.Linear(self.latent_dim, 4*8)
         
         self.deconv1 = nn.ConvTranspose1d(in_channels=4, out_channels=16, kernel_size=5, stride=1, padding=0, output_padding=0)
         self.deconv2 = nn.ConvTranspose1d(in_channels=16, out_channels=8, kernel_size=5, stride=1, padding=0, output_padding=0)

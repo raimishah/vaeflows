@@ -51,7 +51,7 @@ def plot_train_test_reconstructions(model, X_train_tensor, X_train_data, X_test_
         plt.show()
 
         train_squared_error = mean_squared_error(X_data[:len(preds)], preds)
-        print('MSE : ' + str(np.round(train_squared_error,3)))
+        print('MSE : ' + str(np.round(train_squared_error,5)))
 
 
 
@@ -103,7 +103,7 @@ def plot_train_test_reconstructions_cvae(model, X_train_tensor, X_train_data, X_
     
     test_squared_error = mean_squared_error(X_test_data[:-cond_window_size], preds) * len(preds)
 
-    print('train MSE : ' + str(np.round(train_squared_error,3)) + ' test MSE : ' + str(np.round(test_squared_error,3)))
+    print('train MSE : ' + str(np.round(train_squared_error,5)) + ' test MSE : ' + str(np.round(test_squared_error,5)))
         
         
 def plot_train_test_reconstructions_prob_decoder_model(model, X_train_tensor, X_train_data, X_test_tensor,X_test_data):
@@ -142,7 +142,7 @@ def plot_train_test_reconstructions_prob_decoder_model(model, X_train_tensor, X_
         
 
         train_squared_error = mean_squared_error(X_data[:len(preds)], preds)
-        print('MSE : ' + str(np.round(train_squared_error,3)))
+        print('MSE : ' + str(np.round(train_squared_error,5)))
 
 
 
@@ -225,7 +225,7 @@ def plot_train_test_reconstructions_prob_decoder_cvae_model(model, X_train_tenso
 
     test_squared_error = mean_squared_error(X_test_data[:-cond_window_size], preds) * len(preds)
 
-    print('train MSE : ' + str(np.round(train_squared_error,3)) + ' test MSE : ' + str(np.round(test_squared_error,3)))
+    print('train MSE : ' + str(np.round(train_squared_error,5)) + ' test MSE : ' + str(np.round(test_squared_error,5)))
 
     
 
