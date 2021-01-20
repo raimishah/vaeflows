@@ -94,8 +94,8 @@ class CNN_sigmacVAE_flow(nn.Module):
         out = torch.sigmoid(self.deconv3(h))
         
         if self.prob_decoder:
-            rec_mu = self.decoder_fc43(out).tanh()
-            rec_sigma = self.decoder_fc44(out).tanh()
+            rec_mu = self.decoder_fc41(out).tanh()
+            rec_sigma = self.decoder_fc42(out).tanh()
             return out, rec_mu, rec_sigma
         
         #else:

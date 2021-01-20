@@ -267,7 +267,7 @@ def get_taxi_data_VAE(path, window_size, train_test_split=.5):
     #Y_train_tensor = torch.from_numpy(Y_train)
 
     train = torch.utils.data.TensorDataset(X_train_tensor, Y_train_tensor)
-    trainloader = torch.utils.data.DataLoader(train, batch_size=100, shuffle=False)
+    trainloader = torch.utils.data.DataLoader(train, batch_size=256, shuffle=False)
 
 
     #Make test data
@@ -288,7 +288,7 @@ def get_taxi_data_VAE(path, window_size, train_test_split=.5):
     #Y_train_tensor = torch.from_numpy(Y_train)
 
     test = torch.utils.data.TensorDataset(X_test_tensor, Y_test_tensor)
-    testloader = torch.utils.data.DataLoader(test, batch_size=100, shuffle=False)
+    testloader = torch.utils.data.DataLoader(test, batch_size=256, shuffle=False)
     
     return X_train_data, X_test_data, X_train_tensor, X_test_tensor, trainloader, testloader
 
@@ -330,7 +330,7 @@ def get_taxi_data_cVAE(path, window_size, cond_window_size, train_test_split=.5)
     #Y_train_tensor = torch.from_numpy(Y_train)
 
     train = torch.utils.data.TensorDataset(X_train_tensor, cond_train_tensor)
-    trainloader = torch.utils.data.DataLoader(train, batch_size=100, shuffle=False)
+    trainloader = torch.utils.data.DataLoader(train, batch_size=256, shuffle=False)
 
     #Make test data
     X_test = []
@@ -356,6 +356,6 @@ def get_taxi_data_cVAE(path, window_size, cond_window_size, train_test_split=.5)
     #Y_train_tensor = torch.from_numpy(Y_train)
 
     test = torch.utils.data.TensorDataset(X_test_tensor, cond_test_tensor)
-    testloader = torch.utils.data.DataLoader(test, batch_size=100, shuffle=False)
+    testloader = torch.utils.data.DataLoader(test, batch_size=256, shuffle=False)
     
     return X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, trainloader, testloader

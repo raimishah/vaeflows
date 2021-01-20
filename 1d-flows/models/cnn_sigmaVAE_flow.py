@@ -33,23 +33,24 @@ class CNN_sigmaVAE_flow(nn.Module):
         self.prob_decoder = use_probabilistic_decoder
         self.flow_type=flow_type
         
-        self.conv1 = nn.Conv1d(in_channels=1, out_channels=8, kernel_size=6, stride=1, padding=0)
+        self.conv1 = nn.Conv1d(in_channels=1, out_channels=8, kernel_size=5, stride=1, padding=0)
         self.bn1 = nn.BatchNorm1d(8)
-        self.conv2 = nn.Conv1d(in_channels=8, out_channels=16, kernel_size=6, stride=1, padding=0)
+        self.conv2 = nn.Conv1d(in_channels=8, out_channels=16, kernel_size=5, stride=1, padding=0)
         self.bn2 = nn.BatchNorm1d(16)
-        self.conv3 = nn.Conv1d(in_channels=16, out_channels=4, kernel_size=6, stride=1, padding=0)
+        self.conv3 = nn.Conv1d(in_channels=16, out_channels=4, kernel_size=5, stride=1, padding=0)
         self.bn3 = nn.BatchNorm1d(4)
-
-        self.fc41 = nn.Linear(4*8, self.latent_dim)
-        self.fc42 = nn.Linear(4*8, self.latent_dim)
-
-        self.defc1 = nn.Linear(self.latent_dim, 4*8)
         
-        self.deconv1 = nn.ConvTranspose1d(in_channels=4, out_channels=16, kernel_size=2, stride=1, padding=0, output_padding=0)
+        
+        self.fc41 = nn.Linear(4*20, self.latent_dim)
+        self.fc42 = nn.Linear(4*20, self.latent_dim)
+
+        self.defc1 = nn.Linear(self.latent_dim, 4*20)
+        
+        self.deconv1 = nn.ConvTranspose1d(in_channels=4, out_channels=16, kernel_size=5, stride=1, padding=0, output_padding=0)
         self.debn1 = nn.BatchNorm1d(16)
-        self.deconv2 = nn.ConvTranspose1d(in_channels=16, out_channels=8, kernel_size=3, stride=1, padding=0, output_padding=0)
+        self.deconv2 = nn.ConvTranspose1d(in_channels=16, out_channels=8, kernel_size=5, stride=1, padding=0, output_padding=0)
         self.debn2 = nn.BatchNorm1d(8)
-        self.deconv3 = nn.ConvTranspose1d(in_channels=8, out_channels=1, kernel_size=3, stride=1, padding=0, output_padding=0)
+        self.deconv3 = nn.ConvTranspose1d(in_channels=8, out_channels=1, kernel_size=5, stride=1, padding=0, output_padding=0)
 
         self.decoder_fc41 = nn.Linear(window_size, window_size)
         self.decoder_fc42 = nn.Linear(window_size, window_size)
