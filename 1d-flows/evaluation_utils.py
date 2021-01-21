@@ -208,6 +208,7 @@ def VAE_anomaly_detection(model, X_test_tensor, X_test_data, X_train_data, anoma
     #create real labels
     real = np.zeros(len(preds), dtype=np.int)
     anomaly_idxs_test = anomaly_idxs - len(X_train_data)
+    anomaly_idxs_test = anomaly_idxs_test[anomaly_idxs_test > 0]
     real[anomaly_idxs_test] = 1
 
     scores = -(preds - X_test_data[:len(preds)])**2
@@ -303,6 +304,7 @@ def VAE_prob_decoder_anomaly_detection(model, X_test_tensor, X_test_data, X_trai
     #create real labels
     real = np.zeros(len(scores), dtype=np.int)
     anomaly_idxs_test = anomaly_idxs - len(X_train_data)
+    anomaly_idxs_test = anomaly_idxs_test[anomaly_idxs_test > 0]
     real[anomaly_idxs_test] = 1
   
     compute_AUPR(real, scores)
@@ -375,6 +377,7 @@ def cVAE_anomaly_detection(model, X_test_tensor, X_test_data, cond_test_tensor, 
     #create real labels
     real = np.zeros(len(preds), dtype=np.int)
     anomaly_idxs_test = anomaly_idxs - len(X_train_data)
+    anomaly_idxs_test = anomaly_idxs_test[anomaly_idxs_test > 0]
     real[anomaly_idxs_test] = 1
 
     scores = -(preds - X_test_data[:len(preds)])**2
@@ -484,6 +487,7 @@ def cVAE_prob_decoder_anomaly_detection(model, X_test_tensor, X_test_data, cond_
     #create real labels
     real = np.zeros(len(scores), dtype=np.int)
     anomaly_idxs_test = anomaly_idxs - len(X_train_data)
+    anomaly_idxs_test = anomaly_idxs_test[anomaly_idxs_test > 0]
     real[anomaly_idxs_test] = 1
   
     compute_AUPR(real, scores)
