@@ -58,10 +58,21 @@ def plot_train_test_reconstructions(model, X_train_tensor, X_train_data, X_test_
 def plot_train_test_reconstructions_cvae(model, X_train_tensor, X_train_data, X_test_tensor, X_test_data, cond_train_tensor, cond_test_tensor, window_size, cond_window_size):
     torch.no_grad()
     
+    X_train_tensor = X_train_tensor.cuda() if torch.cuda.is_available() else X_train_tensor.cpu()
+    X_train_tensor.to(device)
+    X_test_tensor = X_test_tensor.cuda() if torch.cuda.is_available() else X_test_tensor.cpu()
+    X_test_tensor.to(device)
+    cond_train_tensor = cond_train_tensor.cuda() if torch.cuda.is_available() else cond_train_tensor.cpu()
+    cond_train_tensor.to(device)
+    cond_test_tensor = cond_test_tensor.cuda() if torch.cuda.is_available() else cond_test_tensor.cpu()
+    cond_test_tensor.to(device)
+    
+    
+    
     #train data
+    
     output, _,_,_= model(X_train_tensor, cond_train_tensor)
     output = output.cpu().detach().numpy()
-    print(output.shape)
 
     idx = 0
     preds = []
@@ -76,14 +87,12 @@ def plot_train_test_reconstructions_cvae(model, X_train_tensor, X_train_data, X_
 
     plt.show()
     
-    train_squared_error = mean_squared_error(X_train_data[cond_window_size:-cond_window_size], preds) * len(preds)
+    train_squared_error = mean_squared_error(X_train_data[cond_window_size:-cond_window_size], preds)
 
     
     #test data
-
     output, _,_,_= model(X_test_tensor, cond_test_tensor)
-    output = output.detach().numpy()
-    print(output.shape)
+    output = output.cpu().detach().numpy()
 
     idx = 0
     preds = []
@@ -101,7 +110,7 @@ def plot_train_test_reconstructions_cvae(model, X_train_tensor, X_train_data, X_
     plt.show()
 
     
-    test_squared_error = mean_squared_error(X_test_data[:-cond_window_size], preds) * len(preds)
+    test_squared_error = mean_squared_error(X_test_data[:-cond_window_size], preds)
 
     print('train MSE : ' + str(np.round(train_squared_error,5)) + ' test MSE : ' + str(np.round(test_squared_error,5)))
         
@@ -191,8 +200,7 @@ def plot_train_test_reconstructions_prob_decoder_cvae_model(model, X_train_tenso
     plt.legend()
     plt.show()
     
-    train_squared_error = mean_squared_error(X_train_data[cond_window_size:-cond_window_size], preds) * len(preds)
-
+    train_squared_error = mean_squared_error(X_train_data[cond_window_size:-cond_window_size], preds)
     
     #test data
     out_pred, rec_mu, rec_sigma, _ = model(X_test_tensor, cond_test_tensor)
@@ -223,7 +231,7 @@ def plot_train_test_reconstructions_prob_decoder_cvae_model(model, X_train_tenso
     plt.legend()
     plt.show()
 
-    test_squared_error = mean_squared_error(X_test_data[:-cond_window_size], preds) * len(preds)
+    test_squared_error = mean_squared_error(X_test_data[:-cond_window_size], preds)
 
     print('train MSE : ' + str(np.round(train_squared_error,5)) + ' test MSE : ' + str(np.round(test_squared_error,5)))
 

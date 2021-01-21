@@ -8,6 +8,9 @@ from sklearn.metrics import recall_score
 from sklearn.metrics import f1_score
 from sklearn.metrics import average_precision_score
 from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import auc
+
+from scipy import stats
 from scipy.stats import norm
 from scipy.stats import genpareto
 
@@ -115,7 +118,53 @@ def print_metrics(real, anomaly_preds):
     print('precision : ' + str(precision) + ' recall : ' + str(recall) + ' f1 : ' + str(f1))
     print('\n')
 
+    
+    
+'''
+print_metrics(real, scores):
+    inputs: real - array of 0/1 for not anomaly, anomaly, respectively
+            scores - anomaly scores
+    return: none
+    description: plots PR curve and prints AUPR, best f1
+'''    
+def compute_AUPR(real, scores):
+    precision, recall, thresholds = precision_recall_curve(real, scores)
+    
+    precisions = []
+    recalls = []
+    
+    f1s = []
+    print('Computing AUPR for {} thresholds ... '.format(len(thresholds)))    
+    for idx, th in enumerate(thresholds):
+        #if idx%1000==0:
+        #    print(idx)
+        anomaly_preds = evaluate_adjusted_anomalies(real, scores, th)
+        precision = precision_score(real, anomaly_preds)
+        recall = recall_score(real, anomaly_preds)
+        f1 = f1_score(real, anomaly_preds)
+        
+        precisions.append(precision)
+        recalls.append(recall)
+        f1s.append(f1)
+       
+    plt.title('Precision Recall Curve')
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    
+    plt.plot(recalls, precisions)
+    plt.show()
+    
+    print('\n--- AUPR ---')
+    print(auc(recalls, precisions))    
 
+    best_f1_idx = np.argmax(f1s)
+    best_f1_threshold = thresholds[best_f1_idx]
+    best_f1_score = f1s[best_f1_idx]
+    
+    print('Best F1 score : {} at threshold : {} (1-percentile : {})'.format(best_f1_score, best_f1_threshold, 1-best_f1_score))
+    print('Corresponding best precision : {}, best recall : {}'.format(precisions[best_f1_idx], recalls[best_f1_idx]))
+    
+    
 '''
 evaluate_vae_model(model, X_tensor):
     inputs: model (network), X_tensor (which tensor to evaluate)
@@ -162,6 +211,8 @@ def VAE_anomaly_detection(model, X_test_tensor, X_test_data, X_train_data, anoma
     real[anomaly_idxs_test] = 1
 
     scores = -(preds - X_test_data[:len(preds)])**2
+    
+    compute_AUPR(real, scores)
     
     thresh = np.quantile(scores, initial_quantile_thresh)
     plot_error_and_anomaly_idxs(X_test_data, preds, scores, anomaly_idxs_test, thresh)
@@ -254,6 +305,9 @@ def VAE_prob_decoder_anomaly_detection(model, X_test_tensor, X_test_data, X_trai
     anomaly_idxs_test = anomaly_idxs - len(X_train_data)
     real[anomaly_idxs_test] = 1
   
+    compute_AUPR(real, scores)
+    
+
     VAE_prob_decoder_helper(real, scores, preds, X_test_data, initial_quantile_thresh, anomaly_idxs_test)
     
     return
@@ -279,8 +333,11 @@ def evaluate_cvae_model(model, X_tensor, c):
 
     X_tensor = X_tensor.cuda() if torch.cuda.is_available() else X_tensor.cpu()
     X_tensor.to(device)
+    c = c.cuda() if torch.cuda.is_available() else c.cpu()
+    c.to(device)
+    
     output, _,_,_= model(X_tensor, c)
-    output = output.detach().numpy()
+    output = output.cpu().detach().numpy()
 
     idx = 0
     preds = []
@@ -321,6 +378,8 @@ def cVAE_anomaly_detection(model, X_test_tensor, X_test_data, cond_test_tensor, 
     real[anomaly_idxs_test] = 1
 
     scores = -(preds - X_test_data[:len(preds)])**2
+    
+    compute_AUPR(real, scores)
 
     thresh = np.quantile(scores, initial_quantile_thresh)
     plot_error_and_anomaly_idxs(X_test_data, preds, scores, anomaly_idxs_test, thresh)
@@ -336,6 +395,8 @@ def evaluate_prob_decoder_cvae_model(model, X_tensor, c, cond_window_size):
     
     X_tensor = X_tensor.cuda() if torch.cuda.is_available() else X_tensor.cpu()
     X_tensor.to(device)
+    c = c.cuda() if torch.cuda.is_available() else c.cpu()
+    c.to(device)
     out_pred, rec_mu, rec_sigma, _ = model(X_tensor, c)
     out_pred = out_pred.cpu().detach().numpy()
     probs = []
@@ -425,6 +486,8 @@ def cVAE_prob_decoder_anomaly_detection(model, X_test_tensor, X_test_data, cond_
     anomaly_idxs_test = anomaly_idxs - len(X_train_data)
     real[anomaly_idxs_test] = 1
   
+    compute_AUPR(real, scores)
+
     cVAE_prob_decoder_helper(real, scores, preds, X_test_data, initial_quantile_thresh, anomaly_idxs_test)
     
     return
