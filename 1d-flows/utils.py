@@ -237,8 +237,46 @@ def plot_train_test_reconstructions_prob_decoder_cvae_model(model, X_train_tenso
 
     
 
+    
+
+def get_anomaly_timestamps_and_windows(dataset_path):
+    if 'nyc_taxi' in dataset_path:
+        anomaly_timestamps = ["2014-11-01 19:00:00", "2014-11-27 15:30:00","2014-12-25 15:00:00","2015-01-01 01:00:00","2015-01-27 00:00:00"]
+        anomaly_windows = [["2014-10-30 15:30:00","2014-11-03 22:30:00"],
+                           ["2014-11-25 12:00:00","2014-11-29 19:00:00"],
+                           ["2014-12-23 11:30:00","2014-12-27 18:30:00"],
+                           ["2014-12-29 21:30:00","2015-01-03 04:30:00"],
+                           ["2015-01-24 20:30:00","2015-01-29 03:30:00"]
+                          ]
 
 
+    elif 'ambient_temperature_system_failure' in dataset_path:
+        anomaly_timestamps = ["2013-12-22 20:00:00","2014-04-13 09:00:00"]
+        anomaly_windows = [["2013-12-15 07:00:00","2013-12-30 09:00:00"],
+                           ["2014-03-29 15:00:00","2014-04-20 22:00:00"]
+                          ]
+
+    elif 'cpu_utilization_asg_misconfiguration' in dataset_path:
+        anomaly_timestamps = ["2014-07-12 02:04:00","2014-07-14 21:44:00"]
+        anomaly_windows = [["2014-07-10 12:29:00","2014-07-15 17:19:00"]
+                          ]
+
+    elif 'ec2_request_latency_system_failure' in dataset_path:
+        anomaly_timestamps = ["2014-03-14 09:06:00","2014-03-18 22:41:00","2014-03-21 03:01:00"]
+        anomaly_windows = [["2014-03-14 03:31:00","2014-03-14 14:41:00"],
+                           ["2014-03-18 17:06:00","2014-03-19 04:16:00"],
+                           ["2014-03-20 21:26:00","2014-03-21 03:41:00"]
+                          ]
+
+    elif 'machine_temperature_system_failure' in dataset_path:
+        anomaly_timestamps = ["2013-12-11 06:00:00","2013-12-16 17:25:00","2014-01-28 13:55:00","2014-02-08 14:30:00"]
+        anomaly_windows = [["2013-12-10 06:25:00","2013-12-12 05:35:00"],
+                           ["2013-12-15 17:50:00","2013-12-17 17:00:00"],
+                           ["2014-01-27 14:20:00","2014-01-29 13:30:00"],
+                           ["2014-02-07 14:55:00","2014-02-09 14:05:00"]
+                          ]
+
+    return anomaly_timestamps, anomaly_windows
 
 
 
