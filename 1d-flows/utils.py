@@ -45,7 +45,7 @@ def plot_train_test_reconstructions(model, X_train_tensor, X_train_data, X_test_
                 preds.append(j)
 
         plt.figure(figsize=(30,9))
-        plt.plot(X_data,label='real')
+        plt.plot(X_data[:len(preds)],label='real')
         plt.plot(preds,label='pred')
         plt.legend()
         plt.show()
@@ -81,14 +81,16 @@ def plot_train_test_reconstructions_cvae(model, X_train_tensor, X_train_data, X_
             preds.append(j)
     
     plt.figure(figsize=(30,9))
-    plt.plot(X_train_data[cond_window_size:-cond_window_size],label='real')
+    #plt.plot(X_train_data[cond_window_size:-cond_window_size],label='real')
+    plt.plot(X_train_data[cond_window_size:cond_window_size+len(preds)],label='real')
     plt.plot(preds,label='pred')
     plt.legend()
 
     plt.show()
     
     train_squared_error = mean_squared_error(X_train_data[cond_window_size:cond_window_size+len(preds)], preds)
-    
+    #train_squared_error = mean_squared_error(X_train_data[cond_window_size:-cond_window_size], preds)
+
     #test data
     output, _,_,_= model(X_test_tensor, cond_test_tensor)
     output = output.cpu().detach().numpy()
@@ -102,14 +104,16 @@ def plot_train_test_reconstructions_cvae(model, X_train_tensor, X_train_data, X_
 
 
     plt.figure(figsize=(30,9))
-    plt.plot(X_test_data[:-cond_window_size],label='real')
+    #plt.plot(X_test_data[:-cond_window_size],label='real')
+    plt.plot(X_test_data[:len(preds)],label='real')
     plt.plot(preds,label='pred')
     plt.legend()
 
     plt.show()
     
     test_squared_error = mean_squared_error(X_test_data[:len(preds)], preds)
-
+    #test_squared_error = mean_squared_error(X_test_data[:-cond_window_size], preds)
+    
     print('train MSE : ' + str(np.round(train_squared_error,5)) + ' test MSE : ' + str(np.round(test_squared_error,5)))
 
         
@@ -149,6 +153,7 @@ def plot_train_test_reconstructions_prob_decoder_model(model, X_train_tensor, X_
         
 
         train_squared_error = mean_squared_error(X_data[:len(preds)], preds)
+        #train_squared_error = mean_squared_error(X_data[cond_window_size:-cond_window_size], preds)
         print('MSE : ' + str(np.round(train_squared_error,5)))
 
 
@@ -192,12 +197,13 @@ def plot_train_test_reconstructions_prob_decoder_cvae_model(model, X_train_tenso
             sigma.append(rec_sigma[i,0,j].item())
 
     plt.figure(figsize=(20,6))
-    plt.plot(X_train_data,label='real')
+    plt.plot(X_train_data[cond_window_size:cond_window_size+len(preds)],label='real')
     plt.plot(mu,label='rec_mu',alpha=0.5)
     plt.fill_between(np.arange(len(mu)),np.array(mu)-np.exp(np.array(sigma)),np.array(mu)+np.exp(np.array(sigma)),alpha=0.2)
     plt.legend()
     plt.show()
     
+    #train_squared_error = mean_squared_error(X_train_data[cond_window_size:cond_window_size+len(preds)], preds)
     train_squared_error = mean_squared_error(X_train_data[cond_window_size:cond_window_size+len(preds)], preds)
     
     #test data
@@ -223,13 +229,14 @@ def plot_train_test_reconstructions_prob_decoder_cvae_model(model, X_train_tenso
             sigma.append(rec_sigma[i,0,j].item())
         
     plt.figure(figsize=(20,6))
-    plt.plot(X_test_data,label='real')
+    plt.plot(X_test_data[:len(preds)],label='real')
     plt.plot(mu,label='rec_mu',alpha=0.5)
     plt.fill_between(np.arange(len(mu)),np.array(mu)-np.exp(np.array(sigma)),np.array(mu)+np.exp(np.array(sigma)),alpha=0.2)
     plt.legend()
     plt.show()
 
     test_squared_error = mean_squared_error(X_test_data[:len(preds)], preds)
+    #test_squared_error = mean_squared_error(X_test_data[:-cond_window_size], preds)
 
     print('train MSE : ' + str(np.round(train_squared_error,5)) + ' test MSE : ' + str(np.round(test_squared_error,5)))
 
