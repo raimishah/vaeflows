@@ -174,15 +174,12 @@ def evaluate_vae_model(model, X_tensor):
     idx = 0
     preds=np.zeros((out_pred.shape[0]*out_pred.shape[2], out_pred.shape[3]))
 
+    window_size = X_tensor.shape[2]
+    
     time_idx=0
     for i in range(len(out_pred)):
-        for j in out_pred[i]:
-            for feat in range(j.shape[1]):
-                for ii in j[:,feat]:
-                    preds[time_idx, feat] = ii
-                    time_idx+=1
-                time_idx -= j.shape[0]
-            time_idx+=j.shape[0]
+        preds[time_idx:time_idx+window_size, :] = out_pred[i, 0, :window_size, :]
+        time_idx += window_size
 
     return preds
     
@@ -201,6 +198,50 @@ def VAE_anomaly_detection(model, X_test_tensor, X_test_data, X_train_data, df_Y_
     #create real labels
     real = np.zeros(len(scores), dtype=np.int)
     real[anomaly_idxs] = 1
+    
+    compute_AUPR(real, scores)
+    
+    thresh = np.quantile(scores, initial_quantile_thresh)
+    #plot_error_and_anomaly_idxs(X_test_data, preds, scores, anomaly_idxs_test, thresh)
+    anomaly_preds = evaluate_adjusted_anomalies(real, scores, thresh)
+    print_metrics(real, anomaly_preds)
+
+    
+    
+    
+
+def evaluate_cvae_model(model, X_tensor, c):
+    cond_window_size = c.size(2)
+    
+    X_tensor = X_tensor.cuda() if torch.cuda.is_available() else X_tensor.cpu()
+    X_tensor.to(device)
+    c = c.cuda() if torch.cuda.is_available() else c.cpu()
+    c.to(device)
+
+    out_pred, _,_,_= model(X_tensor, c)
+    out_pred = out_pred.cpu().detach().numpy()
+
+    preds=np.zeros((out_pred.shape[0]*cond_window_size, out_pred.shape[3]))
+    time_idx=0
+    for i in range(len(out_pred)):
+        preds[time_idx:time_idx+cond_window_size, :] = out_pred[i, 0, :cond_window_size, :]
+        time_idx += cond_window_size
+    
+    return preds
+
+
+def cVAE_anomaly_detection(model, X_test_tensor, X_test_data, cond_test_tensor, X_train_data, df_Y_test, initial_quantile_thresh):
+
+    cond_window_size = cond_test_tensor.shape[2]
+
+    #inference
+    preds = evaluate_cvae_model(model, X_test_tensor, cond_test_tensor)
+    scores = - (np.square(preds - X_test_data[:len(preds)])).mean(axis=1)
+
+    real = df_Y_test.values
+    real = np.reshape(real, (real.shape[0], ))
+    real = real[:len(preds)]
+    anomaly_idxs = np.where(real == 1)[0]
     
     compute_AUPR(real, scores)
     

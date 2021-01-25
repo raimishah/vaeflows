@@ -45,21 +45,19 @@ def plot_train_test_reconstructions(model, X_train_tensor, X_train_data, X_test_
         preds=np.zeros((out_pred.shape[0]*out_pred.shape[2], out_pred.shape[3]))
 
         time_idx=0
+        
+        window_size = X_train_tensor.shape[2]
+        
         for i in range(len(out_pred)):
-            for j in out_pred[i]:
-                for feat in range(j.shape[1]):
-                    for ii in j[:,feat]:
-                        preds[time_idx, feat] = ii
-                        time_idx+=1
-                    time_idx -= j.shape[0]
-                time_idx+=j.shape[0]
+            preds[time_idx:time_idx+window_size, :] = out_pred[i, 0, :window_size, :]
+            time_idx += window_size
 
         
-        #for i in range(preds.shape[1]):
-        #    plt.figure()
-        #    plt.plot(X_data[:, i],alpha=.5)
-        #    plt.plot(preds[:, i],alpha=.5)
-        #    plt.show()
+        for i in range(preds.shape[1]):
+            plt.figure()
+            plt.plot(X_data[:, i],alpha=.5)
+            plt.plot(preds[:, i],alpha=.5)
+            plt.show()
         
         mse = mean_squared_error(X_data[:len(preds), :], preds)
         print('MSE : ' + str(np.round(mse,5)))
