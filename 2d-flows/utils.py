@@ -4,6 +4,7 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
 
+from scipy.stats import norm
 
 import matplotlib.pyplot as plt
 
@@ -21,6 +22,8 @@ from torchvision import transforms
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
+
 def softclip(tensor, min):
     """ Clips the tensor values at the minimum value min in a softway. Taken from Handful of Trials """
     result_tensor = min + F.softplus(tensor - min)
@@ -36,155 +39,181 @@ def plot_train_test_reconstructions(model, X_train_tensor, X_train_data, X_test_
         X_tensor.to(device)
         out_pred, _,_,_= model(X_tensor)
         out_pred = out_pred.cpu().detach().numpy()
-        print(out_pred.shape)
-
+        
+        
         idx = 0
-        preds = []
-        for i in range(len(out_pred)):
-            for j in out_pred[i,0]:
-                preds.append(j)
+        preds=np.zeros((out_pred.shape[0]*out_pred.shape[2], out_pred.shape[3]))
 
-        plt.figure(figsize=(30,9))
-        plt.plot(X_data,label='real')
-        plt.plot(preds,label='pred')
-        plt.legend()
+        time_idx=0
+        for i in range(len(out_pred)):
+            for j in out_pred[i]:
+                for feat in range(j.shape[1]):
+                    for ii in j[:,feat]:
+                        preds[time_idx, feat] = ii
+                        time_idx+=1
+                    time_idx -= j.shape[0]
+                time_idx+=j.shape[0]
+
+        
+        #for i in range(preds.shape[1]):
+        #    plt.figure()
+        #    plt.plot(X_data[:, i],alpha=.5)
+        #    plt.plot(preds[:, i],alpha=.5)
+        #    plt.show()
+        
+        mse = mean_squared_error(X_data[:len(preds), :], preds)
+        print('MSE : ' + str(np.round(mse,5)))
+        
+        
+def plot_train_test_reconstructions_cvae(model, X_train_tensor, X_train_data, X_test_tensor, X_test_data, cond_train_tensor, cond_test_tensor, window_size, cond_window_size):
+    torch.no_grad()
+    
+    X_train_tensor = X_train_tensor.cuda() if torch.cuda.is_available() else X_train_tensor.cpu()
+    X_train_tensor.to(device)
+    X_test_tensor = X_test_tensor.cuda() if torch.cuda.is_available() else X_test_tensor.cpu()
+    X_test_tensor.to(device)
+    cond_train_tensor = cond_train_tensor.cuda() if torch.cuda.is_available() else cond_train_tensor.cpu()
+    cond_train_tensor.to(device)
+    cond_test_tensor = cond_test_tensor.cuda() if torch.cuda.is_available() else cond_test_tensor.cpu()
+    cond_test_tensor.to(device)
+    
+    
+    #train data
+    out_pred, _,_,_= model(X_train_tensor, cond_train_tensor)
+    out_pred = out_pred.cpu().detach().numpy()
+        
+        
+    idx = 0
+    preds=np.zeros((out_pred.shape[0]*cond_window_size, out_pred.shape[3]))
+    
+    time_idx=0
+    for i in range(len(out_pred)):
+        preds[time_idx:time_idx+cond_window_size, :] = out_pred[i, 0, :cond_window_size, :]
+        time_idx += cond_window_size
+    
+    for i in range(preds.shape[1]):
+        plt.figure()
+        plt.plot(X_train_data[:, i],alpha=.5)
+        plt.plot(preds[:, i],alpha=.5)
         plt.show()
 
-        train_squared_error = mean_squared_error(X_data[:len(preds)], preds) * len(preds)
-        print('MSE : ' + str(np.round(train_squared_error,3)))
+    mse = mean_squared_error(X_train_data[:len(preds), :], preds)
+    print('MSE : ' + str(np.round(mse,5)))
 
-def get_taxi_data_VAE(path, window_size, train_test_split=.5):
-    window=window_size
-    data = pd.read_csv(path)
 
-    X = np.array(data['value']).reshape(-1,1)
 
-    #normalize
-    scaler = MinMaxScaler()
-    X = scaler.fit_transform(X)
+    #test data
+    out_pred, _,_,_= model(X_test_tensor, cond_test_tensor)
+    out_pred = out_pred.cpu().detach().numpy()
 
-    X = np.squeeze(X, 1)
+    idx = 0
+    preds=np.zeros((out_pred.shape[0]*cond_window_size, out_pred.shape[3]))
+    
+    time_idx=0
+    for i in range(len(out_pred)):
+        preds[time_idx:time_idx+cond_window_size, :] = out_pred[i, 0, :cond_window_size, :]
+        time_idx += cond_window_size
+    
+    for i in range(preds.shape[1]):
+        plt.figure()
+        plt.plot(X_test_data[:, i],alpha=.5)
+        plt.plot(preds[:, i],alpha=.5)
+        plt.show()
 
-    split_idx = int(len(X) * train_test_split)
+    mse = mean_squared_error(X_test_data[:len(preds), :], preds)
+    print('MSE : ' + str(np.round(mse,5)))
 
-    #Make train data
-    X_train_data = X[:split_idx]
-    X_test_data = X[split_idx:]
+def read_machine_data(machine_name, window_size, batch_size):
+    
+    X_train = pd.read_pickle(machine_name + '_train.pkl')
+    X_test = pd.read_pickle(machine_name + '_test.pkl')
+    Y_test = pd.read_pickle(machine_name + '_test_label.pkl')
 
+    df_X_train, df_X_test, df_Y_test = pd.DataFrame(X_train), pd.DataFrame(X_test), pd.DataFrame(Y_test)
+
+    X_train_data = df_X_train.values.copy()
+    X_test_data = df_X_test.values.copy()
+
+
+    #window it
+    window = window_size
     X_train = []
+    X_test = []
+    
     for i in range(0, X_train_data.shape[0]-window+1, window):
         X_train.append([X_train_data[i:i+window]])
 
-    X_train = np.array(X_train)
-    X_train.shape
-
-    X_train = X_train.astype(np.float32)
-
-    X_train_tensor = torch.from_numpy(X_train)
-    Y_train_tensor = torch.from_numpy(X_train)
-
-    #Y_train_tensor = torch.from_numpy(Y_train)
-
-    train = torch.utils.data.TensorDataset(X_train_tensor, Y_train_tensor)
-    trainloader = torch.utils.data.DataLoader(train, batch_size=100, shuffle=False)
-
-    print(X_train_tensor.shape, Y_train_tensor.shape)
-
-
-    #Make test data
-    window=window_size
-
-    X_test = []
     for i in range(0, X_test_data.shape[0]-window+1, window):
         X_test.append([X_test_data[i:i+window]])
-
+        
+    X_train = np.array(X_train)
     X_test = np.array(X_test)
-    X_test.shape
-
-    X_test = X_test.astype(np.float32)
-
+    X_train_tensor = torch.from_numpy(X_train)
     X_test_tensor = torch.from_numpy(X_test)
-    Y_test_tensor = torch.from_numpy(X_test)
-
-    #Y_train_tensor = torch.from_numpy(Y_train)
-
-    test = torch.utils.data.TensorDataset(X_test_tensor, Y_test_tensor)
-    testloader = torch.utils.data.DataLoader(test, batch_size=100, shuffle=False)
-
-    print(X_test_tensor.shape, Y_test_tensor.shape)
     
-    return X_train_data, X_test_data, X_train_tensor, X_test_tensor, trainloader, testloader
+    train = torch.utils.data.TensorDataset(X_train_tensor, X_train_tensor)
+    trainloader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=False)
 
-def get_taxi_data_cVAE(path, window_size, cond_window_size, train_test_split=.5):    
-    window = window_size
-    conditional_window = cond_window_size
+    test = torch.utils.data.TensorDataset(X_test_tensor, X_test_tensor)
+    testloader = torch.utils.data.DataLoader(test, batch_size=batch_size, shuffle=False)
 
-    data = pd.read_csv(path)
-    X = np.array(data['value']).reshape(-1,1)
+    print(X_train_tensor.shape, X_test_tensor.shape)
+    
+    return X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, testloader
 
-    #normalize
-    scaler = MinMaxScaler()
-    X = scaler.fit_transform(X)
+    
+    
+    
+def read_machine_data_cvae(machine_name, window_size, cond_window_size, batch_size):
+    
+    X_train = pd.read_pickle(machine_name + '_train.pkl')
+    X_test = pd.read_pickle(machine_name + '_test.pkl')
+    Y_test = pd.read_pickle(machine_name + '_test_label.pkl')
 
-    X = np.squeeze(X, 1)
+    df_X_train, df_X_test, df_Y_test = pd.DataFrame(X_train), pd.DataFrame(X_test), pd.DataFrame(Y_test)
 
-    split_idx = int(len(X) * train_test_split)
+    X_train_data = df_X_train.values.copy()
+    X_test_data = df_X_test.values.copy()
 
-    #Make train data
-    X_train_data = X[:split_idx]
-    X_test_data = X[split_idx:]
 
+    #train data first
+    window_size = window_size
     X_train = []
     cond_train = []
-    for i in range(0, X_train_data.shape[0]-conditional_window - window + 1, conditional_window):
-        X_train.append([X_train_data[i + conditional_window : i + conditional_window + window]])
-        cond_train.append([X[i : i + conditional_window]])
 
+    for i in range(0, X_train_data.shape[0]-cond_window_size-window_size+1, cond_window_size):
+        X_train.append([X_train_data[i + cond_window_size : i + cond_window_size + window_size]])
+        cond_train.append([X_train_data[i : i + cond_window_size]])
+        
     X_train = np.array(X_train)
     cond_train = np.array(cond_train)
-
     X_train = X_train.astype(np.float32)
     cond_train = cond_train.astype(np.float32)
-
     X_train_tensor = torch.from_numpy(X_train)
     cond_train_tensor = torch.from_numpy(cond_train)
-    Y_train_tensor = torch.from_numpy(X_train)
-
-    #Y_train_tensor = torch.from_numpy(Y_train)
 
     train = torch.utils.data.TensorDataset(X_train_tensor, cond_train_tensor)
-    trainloader = torch.utils.data.DataLoader(train, batch_size=100, shuffle=False)
-
-    print(X_train_tensor.shape, cond_train_tensor.shape)
-
-    #Make test data
-    window=20
-
+    trainloader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=False)
+        
+    #test data now
     X_test = []
     cond_test = []
 
-    X_test.append([X_test_data[0:window]])
-    cond_test.append([X_train_data[-conditional_window:]])
-
-    for i in range(0, X_test_data.shape[0]-conditional_window-window+1, conditional_window):
-        X_test.append([X_test_data[i+conditional_window:i+conditional_window+window]])
-        cond_test.append([X[i:i+conditional_window]])
+    X_test.append([X_test_data[0:window_size]])
+    cond_test.append([X_train_data[-cond_window_size:]])
+        
+    for i in range(0, X_test_data.shape[0]-cond_window_size-window_size+1, cond_window_size):
+        X_test.append([X_test_data[i+cond_window_size:i+cond_window_size+window_size]])
+        cond_test.append([X_test_data[i:i+cond_window_size]])
 
     X_test = np.array(X_test)
     cond_test = np.array(cond_test)
-
     X_test = X_test.astype(np.float32)
     cond_test = cond_test.astype(np.float32)
-
     X_test_tensor = torch.from_numpy(X_test)
     cond_test_tensor = torch.from_numpy(cond_test)
-    Y_test_tensor = torch.from_numpy(X_test)
-
-    #Y_train_tensor = torch.from_numpy(Y_train)
 
     test = torch.utils.data.TensorDataset(X_test_tensor, cond_test_tensor)
-    testloader = torch.utils.data.DataLoader(test, batch_size=100, shuffle=False)
-
-    print(X_test_tensor.shape, cond_test_tensor.shape)
+    testloader = torch.utils.data.DataLoader(test, batch_size=batch_size, shuffle=False)
     
     return X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, trainloader, testloader
