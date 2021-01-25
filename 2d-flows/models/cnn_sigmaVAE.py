@@ -53,9 +53,12 @@ class CNN_sigmaVAE(nn.Module):
         self.decoder_fc42 = nn.Linear(self.window_size, self.window_size)
 
         
+        
     def encoder(self, x):
-        concat_input = x #torch.cat([x, c], 1)
-        h = self.bn1(F.relu(self.conv1(concat_input)))
+        
+        concat_input = x #torch.cat([x, c], 2)
+        
+        h = F.relu(self.conv1(concat_input))
         h = self.bn2(F.relu(self.conv2(h)))
         h = self.bn3(F.relu(self.conv3(h)))
         
@@ -63,13 +66,11 @@ class CNN_sigmaVAE(nn.Module):
         
 
         h = h.view(h.size(0), -1)
-        #h = h.view(h.size(0), h.size(2) * h.size(3))
-        
+                
         mu, var = self.fc41(h), self.fc42(h)
-        
-        
+                
         return self.fc41(h), self.fc42(h)
-    
+
     
     def sampling(self, mu, log_var):
         std = torch.exp(0.5*log_var)
@@ -77,21 +78,25 @@ class CNN_sigmaVAE(nn.Module):
         return eps.mul(std).add(mu) # return z sample
     
     def decoder(self, z):
-        concat_input = z #torch.cat([z, c], 1)
+        
+        concat_input = z #torch.cat([z, c], 2)
         concat_input = self.defc1(concat_input)
         concat_input = concat_input.view(concat_input.size(0), self.saved_dim[0], self.saved_dim[1], self.saved_dim[2])
-        
+
+
         h = self.debn1(F.relu(self.deconv1(concat_input)))
         h = self.debn2(F.relu(self.deconv2(h)))
-        out = F.sigmoid(self.deconv3(h))
+        
+        out = torch.sigmoid(self.deconv3(h))
         
         if self.prob_decoder:
-            rec_mu = self.decoder_fc41(out).tanh()
-            rec_sigma = self.decoder_fc42(out).tanh()
+            rec_mu = self.decoder_fc43(out).tanh()
+            rec_sigma = self.decoder_fc44(out).tanh()
             return out, rec_mu, rec_sigma
         
         else:
             return out, 0, 0
+        
     
     def forward(self, x):
 
