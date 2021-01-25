@@ -132,8 +132,12 @@ def compute_AUPR(real, scores):
     recalls = []
     
     f1s = []
-    print('Computing AUPR for {} thresholds ... '.format(len(thresholds)))    
-    for idx, th in enumerate(thresholds):
+
+    threshold_jump = 5
+    
+    print('Computing AUPR for {} thresholds ... '.format(len(thresholds[::threshold_jump])))    
+    #for idx, th in enumerate(thresholds):
+    for idx, th in enumerate(thresholds[::threshold_jump]):
         #if idx%1000==0:
         #    print(idx)
         anomaly_preds = evaluate_adjusted_anomalies(real, scores, th)
@@ -246,6 +250,6 @@ def cVAE_anomaly_detection(model, X_test_tensor, X_test_data, cond_test_tensor, 
     compute_AUPR(real, scores)
     
     thresh = np.quantile(scores, initial_quantile_thresh)
-    #plot_error_and_anomaly_idxs(X_test_data, preds, scores, anomaly_idxs_test, thresh)
+    plot_error_and_anomaly_idxs(X_test_data, preds, scores, anomaly_idxs, thresh)
     anomaly_preds = evaluate_adjusted_anomalies(real, scores, thresh)
     print_metrics(real, anomaly_preds)
