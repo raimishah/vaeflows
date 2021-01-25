@@ -216,4 +216,4 @@ def read_machine_data_cvae(machine_name, window_size, cond_window_size, batch_si
     test = torch.utils.data.TensorDataset(X_test_tensor, cond_test_tensor)
     testloader = torch.utils.data.DataLoader(test, batch_size=batch_size, shuffle=False)
     
-    return X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, trainloader, testloader
+    return X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader
