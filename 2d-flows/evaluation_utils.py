@@ -163,7 +163,9 @@ def compute_AUPR(real, scores):
     best_f1_threshold = thresholds[best_f1_idx]
     best_f1_score = f1s[best_f1_idx]
     
-    print('Best F1 score : {} at threshold : {} (1-percentile : {})'.format(best_f1_score, best_f1_threshold, np.percentile(thresholds, best_f1_threshold)))
+    best_AD_quantile = 1-stats.percentileofscore(-thresholds, np.abs(best_f1_threshold))/100
+
+    print('Best F1 score : {} at threshold : {} (Best AD quantile : {})'.format(best_f1_score, best_f1_threshold, best_AD_quantile))
     print('Corresponding best precision : {}, best recall : {}'.format(precisions[best_f1_idx], recalls[best_f1_idx]))
     
     
@@ -206,7 +208,7 @@ def VAE_anomaly_detection(model, X_test_tensor, X_test_data, X_train_data, df_Y_
     compute_AUPR(real, scores)
     
     thresh = np.quantile(scores, initial_quantile_thresh)
-    #plot_error_and_anomaly_idxs(X_test_data, preds, scores, anomaly_idxs_test, thresh)
+    plot_error_and_anomaly_idxs(X_test_data, preds, scores, anomaly_idxs, thresh)
     anomaly_preds = evaluate_adjusted_anomalies(real, scores, thresh)
     print_metrics(real, anomaly_preds)
 

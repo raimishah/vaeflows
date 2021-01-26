@@ -161,7 +161,9 @@ def compute_AUPR(real, scores):
     best_f1_threshold = thresholds[best_f1_idx]
     best_f1_score = f1s[best_f1_idx]
     
-    print('Best F1 score : {} at threshold : {} (1-percentile : {})'.format(best_f1_score, best_f1_threshold, np.percentile(thresholds, best_f1_threshold)))
+    best_AD_quantile = 1-stats.percentileofscore(-thresholds, np.abs(best_f1_threshold))/100
+
+    print('Best F1 score : {} at threshold : {} (Best AD quantile : {})'.format(best_f1_score, best_f1_threshold, best_AD_quantile))
     print('Corresponding best precision : {}, best recall : {}'.format(precisions[best_f1_idx], recalls[best_f1_idx]))
     
     
