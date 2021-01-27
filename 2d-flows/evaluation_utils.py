@@ -9,6 +9,8 @@ from sklearn.metrics import f1_score
 from sklearn.metrics import average_precision_score
 from sklearn.metrics import precision_recall_curve
 from sklearn.metrics import auc
+from sklearn.metrics import confusion_matrix
+
 
 from scipy import stats
 from scipy.stats import norm
@@ -62,19 +64,10 @@ def plot_error_and_anomaly_idxs(real, preds, scores, anomaly_idxs, thresh):
 
     return
 
-'''
-evaluate_adjusted_anomalies(real, scores, thresh):
-    inputs: real - real values
-            scores - score/probabilities of observation of real vals according to model
-            thresh - threshold using for anomaly classification
-    return: adjusted_alerts (predictions for anomalies based on DONUT method)
-    
-    description: computes anomaly based on DONUT method
-    
-'''
-def evaluate_adjusted_anomalies(real, scores, thresh):
-    pointwise_alerts = np.array([1 if scores[i] < thresh else 0 for i in range(len(scores))])
 
+
+
+def get_anomaly_windows_i_j(real):
     anomaly_windows = []
     i = 0
     while i < len(real):
@@ -93,6 +86,21 @@ def evaluate_adjusted_anomalies(real, scores, thresh):
             i = j-1
 
         i+=1
+    return anomaly_windows
+
+
+'''
+evaluate_adjusted_anomalies(real, scores, thresh):
+    inputs: real - real values
+            scores - score/probabilities of observation of real vals according to model
+            thresh - threshold using for anomaly classification
+    return: adjusted_alerts (predictions for anomalies based on DONUT method)
+    
+    description: computes anomaly based on DONUT method
+    
+'''
+def evaluate_adjusted_anomalies(anomaly_windows, scores, thresh):
+    pointwise_alerts = np.array([1 if scores[i] < thresh else 0 for i in range(len(scores))])
 
     adjusted_alerts = np.copy(pointwise_alerts)
     for aw in anomaly_windows:
@@ -125,7 +133,7 @@ print_metrics(real, scores):
     return: none
     description: plots PR curve and prints AUPR, best f1
 '''    
-def compute_AUPR(real, scores):
+def compute_AUPR(real, scores, threshold_jump=5):
     precision, recall, thresholds = precision_recall_curve(real, scores)
     
     precisions = []
@@ -133,14 +141,17 @@ def compute_AUPR(real, scores):
     
     f1s = []
 
-    threshold_jump = 5
     
     print('Computing AUPR for {} thresholds ... '.format(len(thresholds[::threshold_jump])))    
-    #for idx, th in enumerate(thresholds):
+    
+    anomaly_windows = get_anomaly_windows_i_j(real)
     for idx, th in enumerate(thresholds[::threshold_jump]):
-        #if idx%1000==0:
-        #    print(idx)
-        anomaly_preds = evaluate_adjusted_anomalies(real, scores, th)
+        if idx == len(thresholds[::threshold_jump]) // 4 or idx == len(thresholds[::threshold_jump]) // 2 or idx == len(thresholds[::threshold_jump]) // (4/3):
+            print(str(100*(idx / len(thresholds[::threshold_jump]))) +'% done')
+        
+        
+        
+        anomaly_preds = evaluate_adjusted_anomalies(anomaly_windows, scores, th)
         precision = precision_score(real, anomaly_preds)
         recall = recall_score(real, anomaly_preds)
         f1 = f1_score(real, anomaly_preds)
@@ -167,8 +178,15 @@ def compute_AUPR(real, scores):
 
     print('Best F1 score : {} at threshold : {} (Best AD quantile : {})'.format(best_f1_score, best_f1_threshold, best_AD_quantile))
     print('Corresponding best precision : {}, best recall : {}'.format(precisions[best_f1_idx], recalls[best_f1_idx]))
+
+        
+    #return tn, fp, fn, tp
+    anomaly_preds = evaluate_adjusted_anomalies(anomaly_windows, scores, best_f1_threshold)
     
+    tn, fp, fn, tp = confusion_matrix(real, anomaly_preds).ravel()
     
+    return np.array([tn,fp,fn,tp]).reshape((1,4))
+
     
     
 def evaluate_vae_model(model, X_tensor):
