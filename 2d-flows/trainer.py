@@ -74,31 +74,31 @@ class Trainer(nn.Module):
                 optimizer.step()
 
 
+            if valloader != None:
+                #VALIDATION
+                with torch.no_grad():
+                    model.eval()
+                    for j, data in enumerate(valloader, 0):
+                        x, y = data
+                        x = x.cuda() if torch.cuda.is_available() else x.cpu()
+                        x.to(device)
+                        y = y.cuda() if torch.cuda.is_available() else y.cpu()
+                        y.to(device)
+                        if self.model_type=='cvae':
+                            outputs, rec_mu, rec_sigma, kl = model(x, y)
+                        else:
+                            outputs, rec_mu, rec_sigma, kl = model(x)
+                        _, rec, _, _ = model.loss_function(outputs, x, rec_mu, rec_sigma, kl)
 
-            #VALIDATION
-            with torch.no_grad():
-                model.eval()
-                for j, data in enumerate(valloader, 0):
-                    x, y = data
-                    x = x.cuda() if torch.cuda.is_available() else x.cpu()
-                    x.to(device)
-                    y = y.cuda() if torch.cuda.is_available() else y.cpu()
-                    y.to(device)
-                    if self.model_type=='cvae':
-                        outputs, rec_mu, rec_sigma, kl = model(x, y)
-                    else:
-                        outputs, rec_mu, rec_sigma, kl = model(x)
-                    _, rec, _, _ = model.loss_function(outputs, x, rec_mu, rec_sigma, kl)
+                        val_loss = rec 
+                        if(np.isnan(val_loss.item())):
+                            print("Noped out in validation at", epoch, j, kl, rec_comps)
+                            flag = True
+                            break
 
-                    val_loss = rec 
-                    if(np.isnan(val_loss.item())):
-                        print("Noped out in validation at", epoch, j, kl, rec_comps)
-                        flag = True
-                        break
-
-                    if self.es.step(val_loss):
-                        early_stopped=True
-                        break
+                        if self.es.step(val_loss):
+                            early_stopped=True
+                            break
                 
             if(flag) or early_stopped:
                 break
