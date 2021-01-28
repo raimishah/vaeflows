@@ -62,6 +62,12 @@ def evaluate_models_from_folder(model_type, folder_path, batch_size):
         print(confusion_matrix_metrics)
         tn_fp_fn_tp = np.concatenate([tn_fp_fn_tp, confusion_matrix_metrics])
 
+        f = open('{}/{}/{}_confusion_metrics.txt'.format(os.getcwd(),folder_path,machine_name), "w")
+        f.write('{} {} {} {}'.format(confusion_matrix_metrics[0,0],confusion_matrix_metrics[0,1],confusion_matrix_metrics[0,2],confusion_matrix_metrics[0,3]))
+        f.close()
+
+
+
     tn = tn_fp_fn_tp[:, 0].sum()
     fp = tn_fp_fn_tp[:, 1].sum()
     fn = tn_fp_fn_tp[:, 2].sum()
