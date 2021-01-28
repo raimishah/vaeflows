@@ -3,6 +3,7 @@ import pandas as pd
 
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
 
 from scipy.stats import norm
 
@@ -160,7 +161,55 @@ def read_machine_data(machine_name, window_size, batch_size):
     return X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, testloader
 
     
+
+def read_machine_data_with_validation(machine_name, window_size, batch_size, val_size=.3):
     
+    X_train = pd.read_pickle(machine_name + '_train.pkl')
+    X_test = pd.read_pickle(machine_name + '_test.pkl')
+    Y_test = pd.read_pickle(machine_name + '_test_label.pkl')
+
+    df_X_train, df_X_test, df_Y_test = pd.DataFrame(X_train), pd.DataFrame(X_test), pd.DataFrame(Y_test)
+
+    X_train_data = df_X_train.values.copy()
+    X_test_data = df_X_test.values.copy()
+
+    #window it
+    window = window_size
+    X_train = []
+    X_test = []
+    
+    for i in range(0, X_train_data.shape[0]-window+1, window):
+        X_train.append([X_train_data[i:i+window]])
+
+    for i in range(0, X_test_data.shape[0]-window+1, window):
+        X_test.append([X_test_data[i:i+window]])
+        
+    X_train = np.array(X_train)
+    X_test = np.array(X_test)
+
+    X_train, X_val = train_test_split(X_train, test_size=val_size, shuffle=False)
+
+    X_train_tensor = torch.from_numpy(X_train)
+    X_val_tensor = torch.from_numpy(X_val)
+    X_test_tensor = torch.from_numpy(X_test)
+    
+    train = torch.utils.data.TensorDataset(X_train_tensor, X_train_tensor)
+    trainloader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=False)
+
+    val = torch.utils.data.TensorDataset(X_val_tensor, X_val_tensor)
+    valloader = torch.utils.data.DataLoader(val, batch_size=batch_size, shuffle=False)
+
+    test = torch.utils.data.TensorDataset(X_test_tensor, X_test_tensor)
+    testloader = torch.utils.data.DataLoader(test, batch_size=batch_size, shuffle=False)
+
+    print(X_train_tensor.shape, X_test_tensor.shape)
+    
+    return X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, valloader, testloader
+
+
+
+
+
     
 def read_machine_data_cvae(machine_name, window_size, cond_window_size, batch_size):
     

@@ -20,8 +20,7 @@ from torchvision import transforms
 
 from trainer import Trainer
 
-from utils import read_machine_data_cvae
-from utils import read_machine_data
+import utils
 
 from utils import softclip
 from utils import plot_train_test_reconstructions, plot_train_test_reconstructions_cvae
@@ -36,7 +35,7 @@ import evaluation_utils
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def train_model_on_all_datasets(model_type, flow_type, model, num_epochs, learning_rate, window_size, cond_window_size, batch_size, start_from='1-1'):
+def train_model_on_all_datasets(model_type, flow_type, model, num_epochs, learning_rate, window_size, cond_window_size, batch_size, early_stop_patience=20, start_from='1-1', use_validation=False):
 
     #dataset_1
     machine_names = ['1-1', '1-2','1-3','1-4','1-5','1-6','1-7','1-8','2-1','2-2','2-3','2-4','2-5','2-6','2-7','2-8','2-9','3-1','3-2','3-3','3-4','3-5','3-6','3-7','3-8','3-9','3-10','3-11']
@@ -51,13 +50,17 @@ def train_model_on_all_datasets(model_type, flow_type, model, num_epochs, learni
 
             #VAE
             if 'cvae' not in model_type:
-                X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, testloader = read_machine_data('../../datasets/ServerMachineDataset/machine-' + machine_name, window_size, batch_size)
+                if not use_validation:
+                    X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data('../../datasets/ServerMachineDataset/machine-' + machine_name, window_size, batch_size)
+                else:
+                    X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, valloader, testloader = utils.read_machine_data_with_validation('../../datasets/ServerMachineDataset/machine-' + machine_name, window_size, batch_size, val_size=.3)
+
 
             else:
-                X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader = read_machine_data_cvae('../../datasets/ServerMachineDataset/machine-' +machine_name, window_size, cond_window_size, batch_size)
+                X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data_cvae('../../datasets/ServerMachineDataset/machine-' +machine_name, window_size, cond_window_size, batch_size)
 
-            trainer = Trainer(data_name = machine_name, model_type = model_type, early_stop_patience=5)
-            model, flag = trainer.train_model(model, num_epochs=num_epochs, learning_rate=learning_rate, trainloader=trainloader)
+            trainer = Trainer(data_name = machine_name, model_type = model_type, flow_type=flow_type, early_stop_patience=5)
+            model, flag = trainer.train_model(model, num_epochs=num_epochs, learning_rate=learning_rate, trainloader=trainloader, valloader=valloader)
 
             trainer.plot_model_loss()
 
@@ -87,7 +90,7 @@ def main():
 
     '''
 
-    model_type='cvae'
+    model_type='vae'
     flow_type=None
 
 
@@ -141,8 +144,8 @@ def main():
             model.cuda() if torch.cuda.is_available() else model.cpu()
             print(model)
             
-    train_model_on_all_datasets(model_type, flow_type, model, num_epochs, lr, window_size, cond_window_size, batch_size, start_from='1-1')
-
+    train_model_on_all_datasets(model_type, flow_type, model, num_epochs, lr, window_size, cond_window_size, batch_size, early_stop_patience=50, start_from='1-1', use_validation=True)
+    
 
 if __name__=='__main__':
 	main()
