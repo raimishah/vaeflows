@@ -31,17 +31,26 @@ def get_scores(model_type, model, X_test_tensor, X_test_data, X_train_data, df_Y
 
 
 
-def evaluate_models_from_folder(model_type, folder_path, batch_size):
+def evaluate_models_from_folder(model_type, folder_path, batch_size, start_from='1-1'):
 
-    saved_models = os.listdir(folder_path)
+    all_files = os.listdir(folder_path)
 
     tn_fp_fn_tp=np.empty((0,4)) 
+    saved_models=[]
+    for file in all_files:
+        if file[-4:] == '.pth':
+            saved_models.append(file)
+
+    #start from code
+    start_from = start_from +'.pth'
+    start_idx = [i for i, s in enumerate(saved_models) if start_from in s]
+    start_idx=start_idx[0]
+    saved_models = saved_models[start_idx:]
 
 
     for model_file in saved_models:
         print(model_file)
-        if '.pth' not in model_file:
-            continue
+        
         model = torch.load('{}/{}/{}'.format(os.getcwd(),folder_path,model_file))
 
         #get real labels
