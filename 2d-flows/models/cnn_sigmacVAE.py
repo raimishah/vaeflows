@@ -35,22 +35,21 @@ class CNN_sigmacVAE(nn.Module):
         self.conv3 = nn.Conv2d(in_channels=16, out_channels=4, kernel_size=5, stride=1, padding=0)
         self.bn3 = nn.BatchNorm2d(4)
 
-        self.fc41 = nn.Linear(4*20*26, self.latent_dim)
-        self.fc42 = nn.Linear(4*20*26, self.latent_dim)
+        self.fc41 = nn.Linear(4*33*26, self.latent_dim)
+        self.fc42 = nn.Linear(4*33*26, self.latent_dim)
 
-        self.defc1 = nn.Linear(388, 4*18*26)
-        
-        self.deconv1 = nn.ConvTranspose2d(in_channels=4, out_channels=16, kernel_size=(7,10), stride=1, padding=0, output_padding=0)
+        self.deconv1 = nn.ConvTranspose2d(in_channels=4, out_channels=16, kernel_size=(9,9), stride=1, padding=0, output_padding=0)
         self.debn1 = nn.BatchNorm2d(16)
-        self.deconv2 = nn.ConvTranspose2d(in_channels=16, out_channels=8, kernel_size=(7,10), stride=1, padding=0, output_padding=0)
+        self.deconv2 = nn.ConvTranspose2d(in_channels=16, out_channels=8, kernel_size=(9,9), stride=1, padding=0, output_padding=0)
         self.debn2 = nn.BatchNorm2d(8)
-        self.deconv3 = nn.ConvTranspose2d(in_channels=8, out_channels=1, kernel_size=(7,8), stride=1, padding=0, output_padding=0)
+        self.deconv3 = nn.ConvTranspose2d(in_channels=8, out_channels=1, kernel_size=(8,9), stride=1, padding=0, output_padding=0)
 
         self.log_sigma = 0
         self.log_sigma = torch.nn.Parameter(torch.full((1,), 0.0)[0], requires_grad=True)
         
         self.decoder_fc41 = nn.Linear(self.window_size, self.window_size)
         self.decoder_fc42 = nn.Linear(self.window_size, self.window_size)
+
 
         
         
@@ -83,7 +82,7 @@ class CNN_sigmacVAE(nn.Module):
         c = c.view(c.size(0), -1)
         concat_input = torch.cat([z,c],1)
         
-        concat_input = concat_input.view(concat_input.size(0), self.saved_dim[0], 6, 13)
+        concat_input = concat_input.view(concat_input.size(0), self.saved_dim[0], 9, 14)
         
         h = self.debn1(F.relu(self.deconv1(concat_input)))
         h = self.debn2(F.relu(self.deconv2(h)))
