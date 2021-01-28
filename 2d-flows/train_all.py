@@ -49,6 +49,8 @@ def train_model_on_all_datasets(model_type, flow_type, model, num_epochs, learni
         while(not done_with_this_server):
 
             #VAE
+
+            valloader=None
             if 'cvae' not in model_type:
                 if not use_validation:
                     X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data('../../datasets/ServerMachineDataset/machine-' + machine_name, window_size, batch_size)
@@ -57,7 +59,10 @@ def train_model_on_all_datasets(model_type, flow_type, model, num_epochs, learni
 
 
             else:
-                X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data_cvae('../../datasets/ServerMachineDataset/machine-' +machine_name, window_size, cond_window_size, batch_size)
+                if not use_validation:
+                    X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data_cvae('../../datasets/ServerMachineDataset/machine-' +machine_name, window_size, cond_window_size, batch_size)
+                else:
+                    X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, valloader, testloader = utils.read_machine_data_cvae_with_validation('../../datasets/ServerMachineDataset/machine-' +machine_name, window_size, cond_window_size, batch_size, val_size=.3)
 
             trainer = Trainer(data_name = machine_name, model_type = model_type, flow_type=flow_type, early_stop_patience=5)
             model, flag = trainer.train_model(model, num_epochs=num_epochs, learning_rate=learning_rate, trainloader=trainloader, valloader=valloader)
@@ -90,7 +95,7 @@ def main():
 
     '''
 
-    model_type='vae'
+    model_type='cvae'
     flow_type=None
 
 

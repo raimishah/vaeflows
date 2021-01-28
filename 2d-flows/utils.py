@@ -234,8 +234,6 @@ def read_machine_data_cvae(machine_name, window_size, cond_window_size, batch_si
         
     X_train = np.array(X_train)
     cond_train = np.array(cond_train)
-    X_train = X_train.astype(np.float32)
-    cond_train = cond_train.astype(np.float32)
     X_train_tensor = torch.from_numpy(X_train)
     cond_train_tensor = torch.from_numpy(cond_train)
 
@@ -255,8 +253,6 @@ def read_machine_data_cvae(machine_name, window_size, cond_window_size, batch_si
 
     X_test = np.array(X_test)
     cond_test = np.array(cond_test)
-    X_test = X_test.astype(np.float32)
-    cond_test = cond_test.astype(np.float32)
     X_test_tensor = torch.from_numpy(X_test)
     cond_test_tensor = torch.from_numpy(cond_test)
 
@@ -264,3 +260,63 @@ def read_machine_data_cvae(machine_name, window_size, cond_window_size, batch_si
     testloader = torch.utils.data.DataLoader(test, batch_size=batch_size, shuffle=False)
     
     return X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader
+
+
+
+def read_machine_data_cvae_with_validation(machine_name, window_size, cond_window_size, batch_size, val_size=.3):
+    
+    X_train = pd.read_pickle(machine_name + '_train.pkl')
+    X_test = pd.read_pickle(machine_name + '_test.pkl')
+    Y_test = pd.read_pickle(machine_name + '_test_label.pkl')
+
+    df_X_train, df_X_test, df_Y_test = pd.DataFrame(X_train), pd.DataFrame(X_test), pd.DataFrame(Y_test)
+
+    X_train_data = df_X_train.values.copy()
+    X_test_data = df_X_test.values.copy()
+
+
+    #train data first
+    window_size = window_size
+    X_train = []
+    cond_train = []
+
+    for i in range(0, X_train_data.shape[0]-cond_window_size-window_size+1, cond_window_size):
+        X_train.append([X_train_data[i + cond_window_size : i + cond_window_size + window_size]])
+        cond_train.append([X_train_data[i : i + cond_window_size]])
+        
+    X_train = np.array(X_train)
+    cond_train = np.array(cond_train)
+
+    X_train, X_val, cond_train, cond_val = train_test_split(X_train, cond_train, test_size=val_size, shuffle=False)
+
+    X_train_tensor = torch.from_numpy(X_train)
+    cond_train_tensor = torch.from_numpy(cond_train)
+    X_val_tensor = torch.from_numpy(X_val)
+    cond_val_tensor = torch.from_numpy(cond_val)
+
+    train = torch.utils.data.TensorDataset(X_train_tensor, cond_train_tensor)
+    trainloader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=False)
+
+    val = torch.utils.data.TensorDataset(X_val_tensor, cond_val_tensor)
+    valloader = torch.utils.data.DataLoader(val, batch_size=batch_size, shuffle=False)
+        
+    #test data now
+    X_test = []
+    cond_test = []
+
+    X_test.append([X_test_data[0:window_size]])
+    cond_test.append([X_train_data[-cond_window_size:]])
+        
+    for i in range(0, X_test_data.shape[0]-cond_window_size-window_size+1, cond_window_size):
+        X_test.append([X_test_data[i+cond_window_size:i+cond_window_size+window_size]])
+        cond_test.append([X_test_data[i:i+cond_window_size]])
+
+    X_test = np.array(X_test)
+    cond_test = np.array(cond_test)
+    X_test_tensor = torch.from_numpy(X_test)
+    cond_test_tensor = torch.from_numpy(cond_test)
+
+    test = torch.utils.data.TensorDataset(X_test_tensor, cond_test_tensor)
+    testloader = torch.utils.data.DataLoader(test, batch_size=batch_size, shuffle=False)
+    
+    return X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, valloader, testloader
