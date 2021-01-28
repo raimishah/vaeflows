@@ -40,6 +40,9 @@ def train_model_on_all_datasets(model_type, flow_type, model, num_epochs, learni
     #dataset_1
     machine_names = ['1-1', '1-2','1-3','1-4','1-5','1-6','1-7','1-8','2-1','2-2','2-3','2-4','2-5','2-6','2-7','2-8','2-9','3-1','3-2','3-3','3-4','3-5','3-6','3-7','3-8','3-9','3-10','3-11']
 
+    start_idx = machine_names.index(start_from)
+    machine_names = machine_names[start_idx : ]
+
     for machine_name in machine_names:
         print('Training on machine- ' + machine_name)
         done_with_this_server = False
