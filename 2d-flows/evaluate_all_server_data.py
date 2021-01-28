@@ -83,9 +83,42 @@ def evaluate_models_from_folder(model_type, folder_path, batch_size):
 
 
 
+def get_combined_metrics(save_dir):
+    txt_files = os.listdir(save_dir)
+    
+    tn_fp_fn_tp=np.empty((0,4)) 
+
+    for txt_file in txt_files:
+        if 'confusion_metrics.txt' not in txt_file:
+            continue
+        else:
+            f = open('{}/{}/{}'.format(os.getcwd(),save_dir,txt_file), 'r')
+            lines = f.readlines()[0]
+            confusion_matrix_metrics = np.array([int(i) for i in lines.split(' ')]).reshape(1,4)
+            tn_fp_fn_tp = np.concatenate([tn_fp_fn_tp, confusion_matrix_metrics])
+
+    tn = tn_fp_fn_tp[:, 0].sum()
+    fp = tn_fp_fn_tp[:, 1].sum()
+    fn = tn_fp_fn_tp[:, 2].sum()
+    tp = tn_fp_fn_tp[:, 3].sum()
+    
+    print('TN sum : {}'.format(tn))        
+    print('FP sum : {}'.format(fp))       
+    print('FN sum : {}'.format(fn))        
+    print('TP sum : {}'.format(tp))
+
+    F1 = tp / (tp+.5*(fp+fn))
+    print('Overall F1 best : {}'.format(F1)) 
+
+
 def main():
 
-    evaluate_models_from_folder('vae', 'saved_models/regular_vae', 256)
+    model_type='vae'
+    save_dir = 'saved_models/regular_vae'
+
+    #evaluate_models_from_folder(model_type, save_dir, 256)
+
+    #get_combined_metrics(save_dir)
 
 
 if __name__ == '__main__':
