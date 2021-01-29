@@ -33,6 +33,7 @@ def softclip(tensor, min):
 
 
 
+'''
 def plot_train_test_reconstructions(model, X_train_tensor, X_train_data, X_test_tensor,X_test_data):
     torch.no_grad()
     for X_tensor, X_data in [(X_train_tensor,X_train_data),(X_test_tensor,X_test_data)]:
@@ -62,65 +63,60 @@ def plot_train_test_reconstructions(model, X_train_tensor, X_train_data, X_test_
         
         mse = mean_squared_error(X_data[:len(preds), :], preds)
         print('MSE : ' + str(np.round(mse,5)))
+'''
+
+def plot_reconstruction(model, model_type, dataloader):
+    model.eval()
+
+    dataiter = iter(dataloader)
+    x, y = dataiter.next()
+
+    preds = np.empty((0,x.shape[1],x.shape[2],x.shape[3]))
+    reals = np.empty((0,x.shape[1],x.shape[2],x.shape[3]))
+
+    cond_window_size=y.shape[2]
+
+    for j, data in enumerate(dataloader, 0):
+
+        x, y = data
+        x = x.cuda() if torch.cuda.is_available() else x.cpu()
+        x.to(device)
+        y = y.cuda() if torch.cuda.is_available() else y.cpu()
+        y.to(device)
+        if model_type=='cvae':
+            outputs, rec_mu, rec_sigma, kl = model(x, y)
+        else:
+            outputs, rec_mu, rec_sigma, kl = model(x)
         
-        
-def plot_train_test_reconstructions_cvae(model, X_train_tensor, X_train_data, X_test_tensor, X_test_data, cond_train_tensor, cond_test_tensor, window_size, cond_window_size):
-    torch.no_grad()
+        #if model_type=='cvae':
+        preds = np.concatenate([preds, outputs.cpu().detach().numpy()])
+        reals = np.concatenate([reals, x.cpu().detach().numpy()])
     
-    X_train_tensor = X_train_tensor.cuda() if torch.cuda.is_available() else X_train_tensor.cpu()
-    X_train_tensor.to(device)
-    X_test_tensor = X_test_tensor.cuda() if torch.cuda.is_available() else X_test_tensor.cpu()
-    X_test_tensor.to(device)
-    cond_train_tensor = cond_train_tensor.cuda() if torch.cuda.is_available() else cond_train_tensor.cpu()
-    cond_train_tensor.to(device)
-    cond_test_tensor = cond_test_tensor.cuda() if torch.cuda.is_available() else cond_test_tensor.cpu()
-    cond_test_tensor.to(device)
+    if model_type=='cvae':
+        temp_preds=np.zeros((preds.shape[0]*cond_window_size, preds.shape[3]))
+        temp_reals=np.zeros((preds.shape[0]*cond_window_size, preds.shape[3]))
+        time_idx=0
+        for i in range(len(preds)):
+            temp_preds[time_idx:time_idx+cond_window_size, :] = preds[i, 0, :cond_window_size, :]
+            temp_reals[time_idx:time_idx+cond_window_size, :] = reals[i, 0, :cond_window_size, :]
+            time_idx += cond_window_size
+
+        preds = temp_preds
+        reals = temp_reals
     
-    
-    #train data
-    out_pred, _,_,_= model(X_train_tensor, cond_train_tensor)
-    out_pred = out_pred.cpu().detach().numpy()
-        
-        
-    idx = 0
-    preds=np.zeros((out_pred.shape[0]*cond_window_size, out_pred.shape[3]))
-    
-    time_idx=0
-    for i in range(len(out_pred)):
-        preds[time_idx:time_idx+cond_window_size, :] = out_pred[i, 0, :cond_window_size, :]
-        time_idx += cond_window_size
-    
+    else:
+        preds = np.reshape(preds, (preds.shape[0] * preds.shape[2], preds.shape[3]))
+        reals = np.reshape(reals, (reals.shape[0] * reals.shape[2], reals.shape[3]))
+
+
     for i in range(preds.shape[1]):
         plt.figure()
-        plt.plot(X_train_data[:, i],alpha=.5)
+        plt.plot(reals[:, i],alpha=.5)
         plt.plot(preds[:, i],alpha=.5)
         plt.show()
-
-    mse = mean_squared_error(X_train_data[:len(preds), :], preds)
-    print('MSE : ' + str(np.round(mse,5)))
-
-
-
-    #test data
-    out_pred, _,_,_= model(X_test_tensor, cond_test_tensor)
-    out_pred = out_pred.cpu().detach().numpy()
-
-    idx = 0
-    preds=np.zeros((out_pred.shape[0]*cond_window_size, out_pred.shape[3]))
-    
-    time_idx=0
-    for i in range(len(out_pred)):
-        preds[time_idx:time_idx+cond_window_size, :] = out_pred[i, 0, :cond_window_size, :]
-        time_idx += cond_window_size
-    
-    for i in range(preds.shape[1]):
-        plt.figure()
-        plt.plot(X_test_data[:, i],alpha=.5)
-        plt.plot(preds[:, i],alpha=.5)
-        plt.show()
-
-    mse = mean_squared_error(X_test_data[:len(preds), :], preds)
-    print('MSE : ' + str(np.round(mse,5)))
+        
+    mse = mean_squared_error(reals, preds)
+    print('MSE : ' + str(np.round(mse,10)))
 
 def read_machine_data(machine_name, window_size, batch_size):
     
