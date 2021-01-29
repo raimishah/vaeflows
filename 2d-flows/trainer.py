@@ -99,13 +99,16 @@ class Trainer(nn.Module):
                         if self.es.step(val_loss):
                             early_stopped=True
                             break
+
+
+                self.val_losses.append(val_loss.item())
+                
                 
             if(flag) or early_stopped:
                 break
             tq.set_postfix(loss=loss.item())
 
             self.losses.append(loss.item())
-            self.val_losses.append(val_loss.item())
                 
         return model, flag
 

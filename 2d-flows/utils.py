@@ -88,7 +88,6 @@ def plot_reconstruction(model, model_type, dataloader):
         else:
             outputs, rec_mu, rec_sigma, kl = model(x)
         
-        #if model_type=='cvae':
         preds = np.concatenate([preds, outputs.cpu().detach().numpy()])
         reals = np.concatenate([reals, x.cpu().detach().numpy()])
     
@@ -108,12 +107,21 @@ def plot_reconstruction(model, model_type, dataloader):
         preds = np.reshape(preds, (preds.shape[0] * preds.shape[2], preds.shape[3]))
         reals = np.reshape(reals, (reals.shape[0] * reals.shape[2], reals.shape[3]))
 
+    i=0
+    num_per_row=4
+    while(i < preds.shape[1]):
+        fig, axs = plt.subplots(1, num_per_row, figsize=(15,5))
 
-    for i in range(preds.shape[1]):
-        plt.figure()
-        plt.plot(reals[:, i],alpha=.5)
-        plt.plot(preds[:, i],alpha=.5)
+        for j in range(num_per_row):
+            if i+j >= preds.shape[1]:
+                break
+            axs[j].plot(reals[:,i+j],alpha=.5)
+            axs[j].plot(preds[:,i+j],alpha=.5)
+        
         plt.show()
+        plt.close()
+
+        i += j
         
     mse = mean_squared_error(reals, preds)
     print('MSE : ' + str(np.round(mse,10)))
