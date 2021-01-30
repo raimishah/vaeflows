@@ -11,11 +11,10 @@ from sklearn.metrics import precision_recall_curve
 from sklearn.metrics import auc
 from sklearn.metrics import confusion_matrix
 
-
 from scipy import stats
 from scipy.stats import norm
+from scipy.stats import multivariate_normal
 from scipy.stats import genpareto
-
 
 import matplotlib.pyplot as plt
 
@@ -140,7 +139,6 @@ def compute_AUPR(real, scores, threshold_jump=5):
     recalls = []
     
     f1s = []
-
     
     print('Computing AUPR for {} thresholds ... '.format(len(thresholds[::threshold_jump])))    
     
@@ -190,6 +188,7 @@ def compute_AUPR(real, scores, threshold_jump=5):
     
     
 def evaluate_vae_model(model, X_tensor):
+    '''
     X_tensor = X_tensor.cuda() if torch.cuda.is_available() else X_tensor.cpu()
     X_tensor.to(device)
     out_pred, _,_,_= model(X_tensor)
@@ -206,7 +205,84 @@ def evaluate_vae_model(model, X_tensor):
         time_idx += window_size
 
     return preds
+    '''
+
+
+
+def evaluate_model_new(model, model_type, dataloader, X_tensor):
+    model.eval()
+
+    dataiter = iter(dataloader)
+    x, y = dataiter.next()
+
+    preds = np.empty((0,x.shape[1],x.shape[2],x.shape[3]))
+    rec_mus = np.empty_like(preds)
+    rec_sigmas = np.empty_like(preds)
     
+    reals = np.empty((0,x.shape[1],x.shape[2],x.shape[3]))
+
+    window_size = x.shape[2]
+    cond_window_size = y.shape[2]
+
+    for j, data in enumerate(dataloader, 0):
+
+        x, y = data
+        x = x.cuda() if torch.cuda.is_available() else x.cpu()
+        x.to(device)
+        y = y.cuda() if torch.cuda.is_available() else y.cpu()
+        y.to(device)
+        if model_type=='cvae':
+            outputs, rec_mu, rec_sigma, kl = model(x, y)
+        else:
+            outputs, rec_mu, rec_sigma, kl = model(x)
+        
+        preds = np.concatenate([preds, outputs.cpu().detach().numpy()])
+        rec_mus = np.concatenate([rec_mus, rec_mu.cpu().detach().numpy()])
+        rec_sigmas = np.concatenate([rec_sigmas, rec_sigma.cpu().detach().numpy()])
+        
+        reals = np.concatenate([reals, x.cpu().detach().numpy()])
+    
+
+    if model_type=='cvae':
+        temp_preds=np.zeros((preds.shape[0]*cond_window_size, preds.shape[3]))
+        temp_reals=np.zeros((reals.shape[0]*cond_window_size, reals.shape[3]))
+        
+        time_idx=0
+        for i in range(len(preds)):
+            temp_preds[time_idx:time_idx+cond_window_size, :] = preds[i, 0, :cond_window_size, :]
+            temp_reals[time_idx:time_idx+cond_window_size, :] = reals[i, 0, :cond_window_size, :]
+            time_idx += cond_window_size
+
+        preds = temp_preds
+        reals = temp_reals
+
+    else:
+        preds = np.reshape(preds, (preds.shape[0] * preds.shape[2], preds.shape[3]))
+        reals = np.reshape(reals, (reals.shape[0] * reals.shape[2], reals.shape[3]))
+
+
+
+    #get scores
+    if model.prob_decoder:
+        probs = []
+        mu_to_plot = []#np.zeros_like(reals)
+        sigma_to_plot = []#np.zeros_like(reals)
+        for i in range(rec_mus.shape[0]):
+            for j in range(rec_mus.shape[2]):
+
+                mu_to_plot.append(rec_mus[i,0,j])
+                sigma_to_plot.append(rec_mus[i,0,j])
+
+                #probability of observed data point according to model
+                prob = multivariate_normal.logpdf(X_tensor[i, 0, j], rec_mus[i,0,j], np.exp(rec_sigmas[i,0,j]))
+                probs.append(prob)
+
+        scores = np.array(probs)
+    else:
+        scores = - (np.square(preds - reals)).mean(axis=1)
+
+    return preds, scores
+
 
 
 def VAE_anomaly_detection(model, X_test_tensor, X_test_data, X_train_data, df_Y_test, initial_quantile_thresh):
