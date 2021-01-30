@@ -66,19 +66,19 @@ def plot_error_and_anomaly_idxs(real, preds, scores, anomaly_idxs, thresh):
 
 
 
-def get_anomaly_windows_i_j(real):
+def get_anomaly_windows_i_j(labels):
     anomaly_windows = []
     i = 0
-    while i < len(real):
-        if real[i] == 1:
+    while i < len(labels):
+        if labels[i] == 1:
             j = i
-            while(j < len(real)):
-                if real[j] == 0:
+            while(j < len(labels)):
+                if labels[j] == 0:
                     anomaly_windows.append([i,j])
                     break
                 j+=1
 
-                if j == len(real)-1 and real[j] == 1:
+                if j == len(labels)-1 and labels[j] == 1:
                     anomaly_windows.append([i,j+1])
                     break                
 
@@ -89,8 +89,8 @@ def get_anomaly_windows_i_j(real):
 
 
 '''
-evaluate_adjusted_anomalies(real, scores, thresh):
-    inputs: real - real values
+evaluate_adjusted_anomalies(anomaly_windows, scores, thresh):
+    inputs: anomaly_windows - from above function i,j indices of anomaly windows
             scores - score/probabilities of observation of real vals according to model
             thresh - threshold using for anomaly classification
     return: adjusted_alerts (predictions for anomalies based on DONUT method)
@@ -115,11 +115,11 @@ print_metrics(real, anomaly_preds):
             anomaly_preds - prediction 0/1 for not anomaly, anomaly, respectively
     return: none
 '''
-def print_metrics(real, anomaly_preds):
+def print_metrics(labels, anomaly_preds):
     print('\n--- Metrics ---')
-    precision = precision_score(real, anomaly_preds)
-    recall = recall_score(real, anomaly_preds)
-    f1 = f1_score(real, anomaly_preds)
+    precision = precision_score(labels, anomaly_preds)
+    recall = recall_score(labels, anomaly_preds)
+    f1 = f1_score(labels, anomaly_preds)
     print('precision : ' + str(precision) + ' recall : ' + str(recall) + ' f1 : ' + str(f1))
     print('\n')
 
@@ -132,8 +132,8 @@ print_metrics(real, scores):
     return: none
     description: plots PR curve and prints AUPR, best f1
 '''    
-def compute_AUPR(real, scores, threshold_jump=5):
-    precision, recall, thresholds = precision_recall_curve(real, scores)
+def compute_AUPR(labels, scores, threshold_jump=5):
+    precision, recall, thresholds = precision_recall_curve(labels, scores)
     
     precisions = []
     recalls = []
@@ -142,7 +142,7 @@ def compute_AUPR(real, scores, threshold_jump=5):
     
     print('Computing AUPR for {} thresholds ... '.format(len(thresholds[::threshold_jump])))    
     
-    anomaly_windows = get_anomaly_windows_i_j(real)
+    anomaly_windows = get_anomaly_windows_i_j(labels)
     for idx, th in enumerate(thresholds[::threshold_jump]):
         if idx == len(thresholds[::threshold_jump]) // 4 or idx == len(thresholds[::threshold_jump]) // 2 or idx == len(thresholds[::threshold_jump]) // (4/3):
             print(str(100*(idx / len(thresholds[::threshold_jump]))) +'% done')
@@ -150,9 +150,9 @@ def compute_AUPR(real, scores, threshold_jump=5):
         
         
         anomaly_preds = evaluate_adjusted_anomalies(anomaly_windows, scores, th)
-        precision = precision_score(real, anomaly_preds)
-        recall = recall_score(real, anomaly_preds)
-        f1 = f1_score(real, anomaly_preds)
+        precision = precision_score(labels, anomaly_preds)
+        recall = recall_score(labels, anomaly_preds)
+        f1 = f1_score(labels, anomaly_preds)
         
         precisions.append(precision)
         recalls.append(recall)
@@ -181,7 +181,7 @@ def compute_AUPR(real, scores, threshold_jump=5):
     #return tn, fp, fn, tp
     anomaly_preds = evaluate_adjusted_anomalies(anomaly_windows, scores, best_f1_threshold)
     
-    tn, fp, fn, tp = confusion_matrix(real, anomaly_preds).ravel()
+    tn, fp, fn, tp = confusion_matrix(labels, anomaly_preds).ravel()
     
     return np.array([tn,fp,fn,tp]).reshape((1,4))
 
