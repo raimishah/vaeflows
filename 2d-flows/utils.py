@@ -117,9 +117,10 @@ def plot_reconstruction(model, model_type, dataloader):
         for j in range(num_per_row):
             if i+j >= preds.shape[1]:
                 break
-            axs[j].plot(reals[:,i+j],alpha=.5)
-            axs[j].plot(preds[:,i+j],alpha=.5)
+            axs[j].plot(reals[:,i+j],alpha=.5,label='real')
+            axs[j].plot(preds[:,i+j],alpha=.5,label='pred')
         
+        plt.legend()
         plt.show()
         plt.close()
 
@@ -127,8 +128,6 @@ def plot_reconstruction(model, model_type, dataloader):
         
     mse = mean_squared_error(reals, preds)
     print('MSE : ' + str(np.round(mse,10)))
-
-
 
 
 
