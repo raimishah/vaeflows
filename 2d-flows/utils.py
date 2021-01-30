@@ -120,7 +120,7 @@ def plot_reconstruction(model, model_type, dataloader):
             axs[j].plot(reals[:,i+j],alpha=.5,label='real')
             axs[j].plot(preds[:,i+j],alpha=.5,label='pred')
         
-        plt.legend()
+            axs[j].legend()
         plt.show()
         plt.close()
 
@@ -188,7 +188,7 @@ def plot_reconstruction_prob_decoder(model, model_type, dataloader, X_tensor):
     mu_to_plot = []#np.zeros_like(reals)
     sigma_to_plot = []#np.zeros_like(reals)
     for i in range(rec_mus.shape[0]):
-        for j in range(rec_mus.shape[2]):
+        for j in range(cond_window_size):
 
             mu_to_plot.append(rec_mus[i,0,j])
             sigma_to_plot.append(rec_mus[i,0,j])

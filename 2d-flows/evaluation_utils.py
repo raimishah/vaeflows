@@ -268,7 +268,7 @@ def evaluate_model_new(model, model_type, dataloader, X_tensor):
         mu_to_plot = []#np.zeros_like(reals)
         sigma_to_plot = []#np.zeros_like(reals)
         for i in range(rec_mus.shape[0]):
-            for j in range(rec_mus.shape[2]):
+            for j in range(cond_window_size):
 
                 mu_to_plot.append(rec_mus[i,0,j])
                 sigma_to_plot.append(rec_mus[i,0,j])
