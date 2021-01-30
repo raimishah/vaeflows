@@ -6,6 +6,8 @@ from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
 
 from scipy.stats import norm
+from scipy.stats import multivariate_normal
+
 
 import matplotlib.pyplot as plt
 
@@ -125,6 +127,100 @@ def plot_reconstruction(model, model_type, dataloader):
         
     mse = mean_squared_error(reals, preds)
     print('MSE : ' + str(np.round(mse,10)))
+
+
+
+
+
+
+def plot_reconstruction_prob_decoder(model, model_type, dataloader, X_tensor):
+    model.eval()
+
+    dataiter = iter(dataloader)
+    x, y = dataiter.next()
+
+    preds = np.empty((0,x.shape[1],x.shape[2],x.shape[3]))
+    rec_mus = np.empty_like(preds)
+    rec_sigmas = np.empty_like(preds)
+    
+    reals = np.empty((0,x.shape[1],x.shape[2],x.shape[3]))
+
+    window_size = x.shape[2]
+    cond_window_size = y.shape[2]
+
+    for j, data in enumerate(dataloader, 0):
+
+        x, y = data
+        x = x.cuda() if torch.cuda.is_available() else x.cpu()
+        x.to(device)
+        y = y.cuda() if torch.cuda.is_available() else y.cpu()
+        y.to(device)
+        if model_type=='cvae':
+            outputs, rec_mu, rec_sigma, kl = model(x, y)
+        else:
+            outputs, rec_mu, rec_sigma, kl = model(x)
+        
+        preds = np.concatenate([preds, outputs.cpu().detach().numpy()])
+        rec_mus = np.concatenate([rec_mus, rec_mu.cpu().detach().numpy()])
+        rec_sigmas = np.concatenate([rec_sigmas, rec_sigma.cpu().detach().numpy()])
+        
+        reals = np.concatenate([reals, x.cpu().detach().numpy()])
+    
+
+    if model_type=='cvae':
+        temp_preds=np.zeros((preds.shape[0]*cond_window_size, preds.shape[3]))
+        temp_reals=np.zeros((reals.shape[0]*cond_window_size, reals.shape[3]))
+        
+        time_idx=0
+        for i in range(len(preds)):
+            temp_preds[time_idx:time_idx+cond_window_size, :] = preds[i, 0, :cond_window_size, :]
+            temp_reals[time_idx:time_idx+cond_window_size, :] = reals[i, 0, :cond_window_size, :]
+            time_idx += cond_window_size
+
+        preds = temp_preds
+        reals = temp_reals
+
+    else:
+        preds = np.reshape(preds, (preds.shape[0] * preds.shape[2], preds.shape[3]))
+        reals = np.reshape(reals, (reals.shape[0] * reals.shape[2], reals.shape[3]))
+
+
+    probs = []
+    mu_to_plot = []#np.zeros_like(reals)
+    sigma_to_plot = []#np.zeros_like(reals)
+    for i in range(rec_mus.shape[0]):
+        for j in range(rec_mus.shape[2]):
+
+            mu_to_plot.append(rec_mus[i,0,j])
+            sigma_to_plot.append(rec_mus[i,0,j])
+
+            #probability of observed data point according to model
+            prob = multivariate_normal.logpdf(X_tensor[i, 0, j], rec_mus[i,0,j], np.exp(rec_sigmas[i,0,j]))
+            probs.append(prob)
+
+    
+    plt.figure(figsize=(20,6))
+    plt.title('Log probs')
+    plt.legend()
+    plt.plot(probs)
+    plt.show()
+
+    mu_to_plot = np.array(mu_to_plot)
+    sigma_to_plot = np.array(sigma_to_plot)
+
+    for i in range(mu_to_plot.shape[1]):
+        plt.figure(figsize=(20,6))
+        plt.plot(reals[:, i],alpha=.5, label='real')
+        plt.plot(mu_to_plot[:, i],alpha=.5, label='rec_mu')
+        #plt.fill_between(np.arange(len(mu_to_plot[:, i])), mu_to_plot[:,i]-np.exp(sigma_to_plot[:,i]), mu_to_plot[:,i]+np.exp(sigma_to_plot[:,i]),alpha=0.2)
+
+        #plt.plot(preds[:, i],alpha=.5, label='rec_mu')
+
+        plt.legend()
+        plt.show()
+        plt.close()
+
+
 
 def read_machine_data(machine_name, window_size, batch_size):
     
