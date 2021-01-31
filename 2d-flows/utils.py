@@ -255,7 +255,7 @@ def read_machine_data(machine_name, window_size, batch_size):
     test = torch.utils.data.TensorDataset(X_test_tensor, X_test_tensor)
     testloader = torch.utils.data.DataLoader(test, batch_size=batch_size, shuffle=False)
 
-    print(X_train_tensor.shape, X_test_tensor.shape)
+    #print(X_train_tensor.shape, X_test_tensor.shape)
     
     return X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, testloader
 
@@ -301,7 +301,7 @@ def read_machine_data_with_validation(machine_name, window_size, batch_size, val
     test = torch.utils.data.TensorDataset(X_test_tensor, X_test_tensor)
     testloader = torch.utils.data.DataLoader(test, batch_size=batch_size, shuffle=False)
 
-    print(X_train_tensor.shape, X_test_tensor.shape)
+    #print(X_train_tensor.shape, X_test_tensor.shape)
     
     return X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, valloader, testloader
 
