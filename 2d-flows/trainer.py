@@ -23,7 +23,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Trainer(nn.Module):
 
-    def __init__(self, data_name, model_type, flow_type='', early_stop_patience=5):
+    def __init__(self, data_name, model_type, flow_type=None, early_stop_patience=5):
         super(Trainer, self).__init__()
 
         self.losses = []
@@ -33,9 +33,10 @@ class Trainer(nn.Module):
         self.flow_type = flow_type
         self.es = EarlyStopping(patience=early_stop_patience)
 
-        
-
     def train_model(self, model, num_epochs, learning_rate, trainloader, valloader=None):
+        
+        self.flow_type = model.flow_type
+
         optimizer = optim.Adam(model.parameters(), lr=learning_rate)
         tq = tqdm(range(num_epochs))
 
@@ -100,9 +101,7 @@ class Trainer(nn.Module):
                             early_stopped=True
                             break
 
-
                 self.val_losses.append(val_loss.item())
-                
                 
             if(flag) or early_stopped:
                 break
@@ -112,11 +111,14 @@ class Trainer(nn.Module):
                 
         return model, flag
 
-    def plot_model_loss(self):
+    def plot_model_loss(self, save_dir, machine_name):
         fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(15,6))
         ax1.plot(self.losses,label='loss (total)', color='blue')
         ax2.plot(self.val_losses,label='validation loss (reconstruction only (MSE))', color='orange')
         plt.legend()
-        #plt.savefig('saved_models/' + self.model_type + self.flow_type + '-' + self.data_name + '.png')
+        if self.flow_type==None:
+            plt.savefig(save_dir + str(self.model_type) + str(self.flow_type) + str(machine_name))
+        else:
+            plt.savefig(save_dir)
         plt.show()
 
