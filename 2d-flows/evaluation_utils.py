@@ -169,7 +169,7 @@ def compute_AUPR(labels, scores, threshold_jump=5):
     print(auc(recalls, precisions))    
 
     best_f1_idx = np.argmax(f1s)
-    best_f1_threshold = thresholds[best_f1_idx]
+    best_f1_threshold = thresholds[best_f1_idx*threshold_jump]
     best_f1_score = f1s[best_f1_idx]
     
     best_AD_quantile = 1-stats.percentileofscore(-thresholds, np.abs(best_f1_threshold))/100
@@ -177,7 +177,6 @@ def compute_AUPR(labels, scores, threshold_jump=5):
     print('Best F1 score : {} at threshold : {} (Best AD quantile : {})'.format(best_f1_score, best_f1_threshold, best_AD_quantile))
     print('Corresponding best precision : {}, best recall : {}'.format(precisions[best_f1_idx], recalls[best_f1_idx]))
 
-        
     #return tn, fp, fn, tp
     anomaly_preds = evaluate_adjusted_anomalies(anomaly_windows, scores, best_f1_threshold)
     
@@ -237,8 +236,9 @@ def evaluate_model_new(model, model_type, dataloader, X_tensor):
             outputs, rec_mu, rec_sigma, kl = model(x)
         
         preds = np.concatenate([preds, outputs.cpu().detach().numpy()])
-        rec_mus = np.concatenate([rec_mus, rec_mu.cpu().detach().numpy()])
-        rec_sigmas = np.concatenate([rec_sigmas, rec_sigma.cpu().detach().numpy()])
+        if model.prob_decoder:
+            rec_mus = np.concatenate([rec_mus, rec_mu.cpu().detach().numpy()])
+            rec_sigmas = np.concatenate([rec_sigmas, rec_sigma.cpu().detach().numpy()])
         
         reals = np.concatenate([reals, x.cpu().detach().numpy()])
     
