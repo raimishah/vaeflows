@@ -43,12 +43,16 @@ def train_model_on_all_datasets(model_type, model, num_epochs, learning_rate, wi
     machine_names = ['1-1', '1-2','1-3','1-4','1-5','1-6','1-7','1-8','2-1','2-2','2-3','2-4','2-5','2-6','2-7','2-8','2-9','3-1','3-2','3-3','3-4','3-5','3-6','3-7','3-8','3-9','3-10','3-11']
     start_idx = machine_names.index(start_from)
     machine_names = machine_names[start_idx : ]
+    
+    lr_save = learning_rate
 
     for machine_name in machine_names:
         print('Training on machine- ' + machine_name)
         done_with_this_server = False
 
         failed_count=0
+
+        learning_rate = lr_save
 
         while(not done_with_this_server):
 
@@ -87,12 +91,13 @@ def train_model_on_all_datasets(model_type, model, num_epochs, learning_rate, wi
                         os.makedirs(save_folder)
                     torch.save(model, save_folder + model_type + '-' + machine_name + '.pth')
                 else:
-                    save_folder = 'saved_models/' + model_type + '/' if model.flow_type != None else 'saved_models/' + model_type + '/'
+                    save_folder = 'saved_models/' + model_type + model.flow_type + '/' if model.flow_type != None else 'saved_models/' + model_type + '/'
                     if not os.path.exists(save_folder):
                         os.makedirs(save_folder)
 
                     torch.save(model, save_folder + model_type + '-' + machine_name + '.pth')
 
+                print('saving to folder {}'.format(save_folder))
                 #plot loss also
                 trainer.plot_model_loss(save_folder)
 
