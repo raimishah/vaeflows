@@ -76,10 +76,12 @@ def train_model_on_all_datasets(model_type, model, num_epochs, learning_rate, wi
             model, flag = trainer.train_model(model, num_epochs=num_epochs, learning_rate=learning_rate, trainloader=trainloader, valloader=valloader)
 
             if flag:
-                return
+                if failed_count>5:
+                    return
+                #return
                 #failed
                 failed_count+=1
-                if failed_count>3:
+                if failed_count>2:
                     learning_rate /=2
                 continue
             else:
@@ -98,8 +100,9 @@ def train_model_on_all_datasets(model_type, model, num_epochs, learning_rate, wi
                     torch.save(model, save_folder + model_type + '-' + machine_name + '.pth')
 
                 print('saving to folder {}'.format(save_folder))
+
                 #plot loss also
-                trainer.plot_model_loss(save_folder)
+                trainer.plot_model_loss(save_folder, machine_name)
 
 def main():
 
