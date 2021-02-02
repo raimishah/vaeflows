@@ -31,7 +31,8 @@ class Trainer(nn.Module):
         self.data_name = data_name
         self.model_type = model_type
         self.flow_type = flow_type
-        self.es = EarlyStopping(patience=early_stop_patience)
+        self.es_train = EarlyStopping(patience=50)
+        self.es_val = EarlyStopping(patience=early_stop_patience)
 
     def train_model(self, model, num_epochs, learning_rate, trainloader, valloader=None):
         
@@ -40,7 +41,8 @@ class Trainer(nn.Module):
         optimizer = optim.Adam(model.parameters(), lr=learning_rate)
         tq = tqdm(range(num_epochs))
 
-
+        early_stopped_train=False
+        early_stopped_val=False
         early_stopped=False
 
         for epoch in tq:
@@ -71,6 +73,11 @@ class Trainer(nn.Module):
                     flag = True
                     break
 
+
+                if self.es_train.step(loss):
+                    early_stopped_train=True
+
+
                 loss.backward()
 
                 #200k or so usually, sometimes 1mil
@@ -82,11 +89,12 @@ class Trainer(nn.Module):
                 #total_norm = total_norm ** (1. / 2)
                 #print(total_norm)
                 
-                clip_val = 200000
+                clip_val = 1000000
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
 
                 
                 optimizer.step()
+
 
 
             if valloader != None:
@@ -116,9 +124,11 @@ class Trainer(nn.Module):
                             flag = True
                             break
 
-                        if self.es.step(val_loss):
-                            early_stopped=True
-                            break
+                        if self.es_val.step(val_loss):
+                            early_stopped_val=True
+                            if early_stopped_train:
+                                early_stopped=True
+                                break
 
                 self.val_losses.append(val_loss.item())
                 
