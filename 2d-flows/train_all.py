@@ -68,9 +68,9 @@ def train_model_on_all_datasets(model_type, model, num_epochs, learning_rate, wi
 
             else:
                 if not use_validation:
-                    X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data_cvae('../ServerMachineDataset/machine-' +machine_name, window_size, cond_window_size, batch_size)
+                    X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data_cvae('../../datasets/ServerMachineDataset/machine-' +machine_name, window_size, cond_window_size, batch_size)
                 else:
-                    X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, valloader, testloader = utils.read_machine_data_cvae_with_validation('../ServerMachineDataset/machine-' +machine_name, window_size, cond_window_size, batch_size, val_size=.3)
+                    X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, valloader, testloader = utils.read_machine_data_cvae_with_validation('../../datasets/ServerMachineDataset/machine-' +machine_name, window_size, cond_window_size, batch_size, val_size=.3)
 
             trainer = Trainer(data_name = machine_name, model_type = model_type, flow_type=model.flow_type, early_stop_patience=early_stop_patience)
             model, flag = trainer.train_model(model, num_epochs=num_epochs, learning_rate=learning_rate, trainloader=trainloader, valloader=valloader)
@@ -118,9 +118,9 @@ def main():
 
     '''
 
-    model_type='vae'
-    flow_type=None
-    prob_decoder=False
+    model_type='cvae'
+    flow_type='MAF'
+    prob_decoder=True
 
     print('Trainig with {}, with flow - {}, and prob decoder - {}'.format(model_type, flow_type, prob_decoder))
 
@@ -144,7 +144,7 @@ def main():
         model = CNN_sigmacVAE(latent_dim=latent_dim, window_size=window_size, cond_window_size=cond_window_size ,num_feats=num_feats, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
         print(model)
             
-    train_model_on_all_datasets(model_type, model, num_epochs, lr, window_size, cond_window_size, batch_size, early_stop_patience=early_stop_patience, start_from='1-1', use_validation=True)
+    train_model_on_all_datasets(model_type, model, num_epochs, lr, window_size, cond_window_size, batch_size, early_stop_patience=early_stop_patience, start_from='2-8', use_validation=True)
 
 if __name__=='__main__':
 	main()

@@ -72,6 +72,20 @@ class Trainer(nn.Module):
                     break
 
                 loss.backward()
+
+                #200k or so usually, sometimes 1mil
+                #total_norm=0
+                #for p in model.parameters():
+                #    if p.grad is not None:
+                #        param_norm = p.grad.data.norm(2)
+                #        total_norm += param_norm.item() ** 2
+                #total_norm = total_norm ** (1. / 2)
+                #print(total_norm)
+                
+                clip_val = 200000
+                torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
+
+                
                 optimizer.step()
 
 
@@ -89,7 +103,12 @@ class Trainer(nn.Module):
                             outputs, rec_mu, rec_sigma, kl = model(x, y)
                         else:
                             outputs, rec_mu, rec_sigma, kl = model(x)
-                        _, rec, _, _ = model.loss_function(outputs, x, rec_mu, rec_sigma, kl)
+
+                        #TODO
+                        #DO REAL MSE INSTEAD OF LOSS_FUNCTION -- causing issue with early stopping I think
+                        rec = torch.sum((outputs - x) ** 2)
+
+                        #_, rec, _, _ = model.loss_function(outputs, x, rec_mu, rec_sigma, kl)
 
                         val_loss = rec 
                         if(np.isnan(val_loss.item())):
@@ -119,6 +138,6 @@ class Trainer(nn.Module):
         if self.flow_type==None:
             plt.savefig(save_dir + str(self.model_type) + str(self.flow_type) + str(machine_name))
         else:
-            plt.savefig(save_dir)
+            plt.savefig(save_dir + str(self.model_type) + str(machine_name))
         plt.show()
 
