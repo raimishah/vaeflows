@@ -210,9 +210,13 @@ class CNN_sigmacVAE(nn.Module):
         return rec_comps, rec
 
     
+    #x in input here,
     def loss_function(self, recon_x, x, rec_mu, rec_sigma, kl):
-        
-        rec_comps, rec = self.reconstruction_loss(recon_x, x)
+        if self.prob_decoder:
+            rec_comps, rec = self.reconstruction_loss(rec_mu, x)
+        else:
+            rec_comps, rec = self.reconstruction_loss(recon_x, x)
+
         rec_mu_sigma_loss = 0
         if self.prob_decoder:
             rec_mu_sigma_loss = self.gaussian_nll(rec_mu, rec_sigma, x).sum()
