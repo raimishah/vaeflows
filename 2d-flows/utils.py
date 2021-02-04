@@ -246,8 +246,8 @@ def read_machine_data(machine_name, window_size, batch_size):
         
     X_train = np.array(X_train)
     X_test = np.array(X_test)
-    X_train_tensor = torch.from_numpy(X_train)
-    X_test_tensor = torch.from_numpy(X_test)
+    X_train_tensor = torch.from_numpy(X_train).float()
+    X_test_tensor = torch.from_numpy(X_test).float()
     
     train = torch.utils.data.TensorDataset(X_train_tensor, X_train_tensor)
     trainloader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=False)
@@ -288,9 +288,9 @@ def read_machine_data_with_validation(machine_name, window_size, batch_size, val
 
     X_train, X_val = train_test_split(X_train, test_size=val_size, shuffle=False)
 
-    X_train_tensor = torch.from_numpy(X_train)
-    X_val_tensor = torch.from_numpy(X_val)
-    X_test_tensor = torch.from_numpy(X_test)
+    X_train_tensor = torch.from_numpy(X_train).float()
+    X_val_tensor = torch.from_numpy(X_val).float()
+    X_test_tensor = torch.from_numpy(X_test).float()
     
     train = torch.utils.data.TensorDataset(X_train_tensor, X_train_tensor)
     trainloader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=False)
@@ -333,8 +333,8 @@ def read_machine_data_cvae(machine_name, window_size, cond_window_size, batch_si
         
     X_train = np.array(X_train)
     cond_train = np.array(cond_train)
-    X_train_tensor = torch.from_numpy(X_train)
-    cond_train_tensor = torch.from_numpy(cond_train)
+    X_train_tensor = torch.from_numpy(X_train).float()
+    cond_train_tensor = torch.from_numpy(cond_train).float()
 
     train = torch.utils.data.TensorDataset(X_train_tensor, cond_train_tensor)
     trainloader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=False)
@@ -388,10 +388,10 @@ def read_machine_data_cvae_with_validation(machine_name, window_size, cond_windo
 
     X_train, X_val, cond_train, cond_val = train_test_split(X_train, cond_train, test_size=val_size, shuffle=False)
 
-    X_train_tensor = torch.from_numpy(X_train)
-    cond_train_tensor = torch.from_numpy(cond_train)
-    X_val_tensor = torch.from_numpy(X_val)
-    cond_val_tensor = torch.from_numpy(cond_val)
+    X_train_tensor = torch.from_numpy(X_train).float()
+    cond_train_tensor = torch.from_numpy(cond_train).float()
+    X_val_tensor = torch.from_numpy(X_val).float()
+    cond_val_tensor = torch.from_numpy(cond_val).float()
 
     train = torch.utils.data.TensorDataset(X_train_tensor, cond_train_tensor)
     trainloader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=False)
@@ -412,8 +412,8 @@ def read_machine_data_cvae_with_validation(machine_name, window_size, cond_windo
 
     X_test = np.array(X_test)
     cond_test = np.array(cond_test)
-    X_test_tensor = torch.from_numpy(X_test)
-    cond_test_tensor = torch.from_numpy(cond_test)
+    X_test_tensor = torch.from_numpy(X_test).float()
+    cond_test_tensor = torch.from_numpy(cond_test).float()
 
     test = torch.utils.data.TensorDataset(X_test_tensor, cond_test_tensor)
     testloader = torch.utils.data.DataLoader(test, batch_size=batch_size, shuffle=False)
