@@ -102,12 +102,26 @@ def evaluate_adjusted_anomalies(anomaly_windows, scores, thresh):
     pointwise_alerts = np.array([1 if scores[i] < thresh else 0 for i in range(len(scores))])
 
     adjusted_alerts = np.copy(pointwise_alerts)
+
+    alert_delays = []
+
     for aw in anomaly_windows:
         if pointwise_alerts[aw[0]:aw[1]].any() == 1:
+            #detection time
+            first_alert_time = np.where(pointwise_alerts[aw[0]:aw[1]] == 1)[0][0]
+            #print('\nDetection time: ')
+            #print(first_alert_time)
+            alert_delays.append(first_alert_time)
+            
+
+
+
             adjusted_alerts[aw[0]:aw[1]] = 1
+            
 
+    alert_delays = np.array(alert_delays)
 
-    return adjusted_alerts
+    return adjusted_alerts, alert_delays
 
 '''
 print_metrics(real, anomaly_preds):
@@ -149,7 +163,7 @@ def compute_AUPR(labels, scores, threshold_jump=5):
         
         
         
-        anomaly_preds = evaluate_adjusted_anomalies(anomaly_windows, scores, th)
+        anomaly_preds, _ = evaluate_adjusted_anomalies(anomaly_windows, scores, th)
         precision = precision_score(labels, anomaly_preds)
         recall = recall_score(labels, anomaly_preds)
         f1 = f1_score(labels, anomaly_preds)
@@ -178,11 +192,11 @@ def compute_AUPR(labels, scores, threshold_jump=5):
     print('Corresponding best precision : {}, best recall : {}'.format(precisions[best_f1_idx], recalls[best_f1_idx]))
 
     #return tn, fp, fn, tp
-    anomaly_preds = evaluate_adjusted_anomalies(anomaly_windows, scores, best_f1_threshold)
+    anomaly_preds, alert_delays = evaluate_adjusted_anomalies(anomaly_windows, scores, best_f1_threshold)
     
     tn, fp, fn, tp = confusion_matrix(labels, anomaly_preds).ravel()
     
-    return np.array([tn,fp,fn,tp]).reshape((1,4))
+    return np.array([tn,fp,fn,tp]).reshape((1,4)), alert_delays
 
     
     
@@ -281,7 +295,11 @@ def evaluate_model_new(model, model_type, dataloader, X_tensor):
     else:
         scores = - (np.square(preds - reals)).mean(axis=1)
 
-    return preds, scores
+    mse = mean_squared_error(reals, preds)
+    print('MSE : ' + str(np.round(mse,10)))
+
+
+    return preds, scores, mse
 
 
 
