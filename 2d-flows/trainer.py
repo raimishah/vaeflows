@@ -114,7 +114,10 @@ class Trainer(nn.Module):
 
                         #TODO
                         #DO REAL MSE INSTEAD OF LOSS_FUNCTION -- causing issue with early stopping I think
-                        rec = torch.sum((outputs - x) ** 2)
+                        if model.prob_decoder:
+                            rec = torch.sum((rec_mu - x) ** 2)                        
+                        else:
+                            rec = torch.sum((outputs - x) ** 2)
 
                         #_, rec, _, _ = model.loss_function(outputs, x, rec_mu, rec_sigma, kl)
 
