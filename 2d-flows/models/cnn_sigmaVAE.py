@@ -20,6 +20,7 @@ from utils import softclip
 
 from maf import MAF, RealNVP
 from planar_flow import PlanarFlow, NormalizingFlow
+from bnaf import Tanh, MaskedWeight, BNAF, Sequential, Permutation
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -202,6 +203,34 @@ class CNN_sigmaVAE(nn.Module):
             self.block_planar = [PlanarFlow]
             self.flow = NormalizingFlow(dim=self.latent_dim, blocks=self.block_planar, flow_length=16, density=distrib.MultivariateNormal(torch.zeros(self.latent_dim), torch.eye(self.latent_dim)))
 
+        elif self.flow_type =='BNAF':
+            num_flows = 1
+            num_layers = 2
+            n_dims = 10
+            hidden_dim = 10
+            residual = None
+
+            flows = []
+            for f in range(num_flows):
+                layers = []
+                for _ in range(num_layers - 1):
+                    layers.append(MaskedWeight(n_dims * hidden_dim,
+                                            n_dims * hidden_dim, dim=n_dims))
+                    layers.append(Tanh())
+
+                flows.append(
+                    BNAF(*([MaskedWeight(n_dims, n_dims * hidden_dim, dim=n_dims), Tanh()] + \
+                        layers + \
+                        [MaskedWeight(n_dims * hidden_dim, n_dims, dim=n_dims)]),\
+                        res=residual if f < num_flows - 1 else None
+                    )
+                )
+
+                if f < num_flows - 1:
+                    flows.append(Permutation(n_dims, 'flip'))
+
+            self.flow = Sequential(*flows).to(device)
+
         
     def encoder(self, x):
         
@@ -304,7 +333,11 @@ class CNN_sigmaVAE(nn.Module):
         # Obtain our first set of latent points
         z0 = self.sampling(mu, log_var)
         
-        zk, loss = self.flow.log_prob(z0, None)
+        if self.flow_type == 'BNAF':
+            zk, loss = self.flow(z0)
+        else:
+            zk, loss = self.flow.log_prob(z0, None)
+
         loss = -loss.mean(0)
 
         return zk, loss
