@@ -20,6 +20,8 @@ from utils import softclip
 
 from maf import MAF, RealNVP
 from planar_flow import PlanarFlow, NormalizingFlow
+from bnaf import Tanh, MaskedWeight, BNAF, Sequential, Permutation
+
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -57,16 +59,51 @@ class CNN_sigmacVAE(nn.Module):
         
         self.decoder_fc41 = nn.Linear(self.window_size * self.num_feats, self.window_size * self.num_feats)
         self.decoder_fc42 = nn.Linear(self.window_size * self.num_feats, self.window_size * self.num_feats)
+        
+        
+        self.latent_cond_layer = nn.Linear(self.cond_window_size * self.num_feats, self.latent_dim)
+        
+        
 
         if self.flow_type=='RealNVP':
-            self.flow = RealNVP(n_blocks=1, input_size=self.latent_dim, hidden_size=50, n_hidden=1)
+            #self.flow = RealNVP(n_blocks=1, input_size=self.latent_dim, hidden_size=50, n_hidden=1)
+            self.flow = RealNVP(n_blocks=1, input_size=self.latent_dim, cond_label_size = self.cond_window_size * self.num_feats, hidden_size=50, n_hidden=1)
         
         elif self.flow_type=='MAF':
-            self.flow = MAF(n_blocks=1, input_size=self.latent_dim, hidden_size=10, n_hidden=1)
+            #self.flow = MAF(n_blocks=1, input_size=self.latent_dim, hidden_size=10, n_hidden=1)
+            self.flow = MAF(n_blocks=1, input_size=self.latent_dim, cond_label_size = self.cond_window_size * self.num_feats, hidden_size=10, n_hidden=1)
         
         elif self.flow_type =='Planar':
             self.block_planar = [PlanarFlow]
             self.flow = NormalizingFlow(dim=self.latent_dim, blocks=self.block_planar, flow_length=16, density=distrib.MultivariateNormal(torch.zeros(self.latent_dim), torch.eye(self.latent_dim)))
+        
+        elif self.flow_type =='BNAF':
+            num_flows = 1
+            num_layers = 2
+            n_dims = 10
+            hidden_dim = 10
+            residual = None
+
+            flows = []
+            for f in range(num_flows):
+                layers = []
+                for _ in range(num_layers - 1):
+                    layers.append(MaskedWeight(n_dims * hidden_dim,
+                                            n_dims * hidden_dim, dim=n_dims))
+                    layers.append(Tanh())
+
+                flows.append(
+                    BNAF(*([MaskedWeight(n_dims, n_dims * hidden_dim, dim=n_dims), Tanh()] + \
+                        layers + \
+                        [MaskedWeight(n_dims * hidden_dim, n_dims, dim=n_dims)]),\
+                        res=residual if f < num_flows - 1 else None
+                    )
+                )
+
+                if f < num_flows - 1:
+                    flows.append(Permutation(n_dims, 'flip'))
+
+            self.flow = Sequential(*flows).to(device)
 
         
         
@@ -156,7 +193,7 @@ class CNN_sigmacVAE(nn.Module):
         return z_k, (logs / float(n_batch))
 
     
-    def latent_not_planar(self, x, z_params):
+    def latent_not_planar(self, x, z_params, c):
         n_batch = x.size(0)
                 
         # Retrieve set of parameters
@@ -167,7 +204,14 @@ class CNN_sigmacVAE(nn.Module):
         # Obtain our first set of latent points
         z0 = self.sampling(mu, log_var)
         
-        zk, loss = self.flow.log_prob(z0, None)
+        #zk, loss = self.flow.log_prob(z0, None)
+        c = c.view(c.size(0), -1)
+        
+        if self.flow_type == 'BNAF':
+            zk, loss = self.flow(z0)
+        else:
+            zk, loss = self.flow.log_prob(z0, c)
+        
         loss = -loss.mean(0)
 
         return zk, loss
@@ -188,7 +232,7 @@ class CNN_sigmacVAE(nn.Module):
             if self.flow_type =='Planar':
                 z_k, kl = self.latent_planar(x, z_params)
             else:
-                z_k, kl = self.latent_not_planar(x, z_params)
+                z_k, kl = self.latent_not_planar(x, z_params, c)
             
             output, rec_mu, rec_sigma = self.decoder(z_k, c)
     
