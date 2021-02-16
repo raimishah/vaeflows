@@ -24,31 +24,25 @@ def get_scores_and_labels(model_type, model, df_Y_test, dataloader, X_test_tenso
 
     return scores, labels, mse
 
-
-def get_scores(model_type, model, X_test_tensor, X_test_data, X_train_data, df_Y_test, cond_test_tensor=None):
+def get_scores_and_labels_from_generation(model, df_Y_test, dataloader, X_test_tensor):
+    
+    preds, reals, scores, mse = evaluation_utils.evaluate_cvae_generation(model, dataloader, X_test_tensor)
+    
     labels = df_Y_test.values
     labels = np.reshape(labels, (labels.shape[0], ))
     anomaly_idxs = np.where(labels == 1)[0]
     
-    #inference
-    if model_type=='vae':
-        preds = evaluation_utils.evaluate_vae_model(model, X_test_tensor)
-    elif model_type=='cvae':
-        cond_window_size = cond_test_tensor.shape[2]
-        preds = evaluation_utils.evaluate_cvae_model(model, X_test_tensor, cond_test_tensor)
-
-    print(preds)
-
-    scores = - (np.square(preds - X_test_data[:len(preds)])).mean(axis=1)
-
-    #create real labels
+    #create labels only up to num preds
     labels = np.zeros(len(scores), dtype=np.int)
     labels[anomaly_idxs] = 1
 
-    return scores, labels
+    return scores, labels, mse
 
 
-def evaluate_models_from_folder(model_type, folder_path, batch_size, start_from='1-1'):
+def evaluate_models_from_folder(model_type, folder_path, batch_size, cvae_generation = False, start_from='1-1'):
+    if cvae_generation and model_type != 'cvae':
+        print('\nCannot generate with VAE, need CVAE to generate.\n')
+
 
     all_files = os.listdir(folder_path)
     all_files = sorted(all_files)
@@ -81,17 +75,21 @@ def evaluate_models_from_folder(model_type, folder_path, batch_size, start_from=
         print(machine_name)
 
         if model_type=='vae':
-            X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data('../../datasets/ServerMachineDataset/machine-' + machine_name, model.window_size, batch_size)
+            X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data('../ServerMachineDataset/machine-' + machine_name, model.window_size, batch_size)
             
             scores, labels, mse = get_scores_and_labels(model_type, model, df_Y_test, testloader, X_test_tensor)
 
         if model_type=='cvae':
-            X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data_cvae('../../datasets/ServerMachineDataset/machine-' + machine_name, model.window_size, model.cond_window_size, batch_size)
+            X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data_cvae('../ServerMachineDataset/machine-' + machine_name, model.window_size, model.cond_window_size, batch_size)
             
-            scores, labels, mse = get_scores_and_labels(model_type, model, df_Y_test, testloader, X_test_tensor)
+            if cvae_generation:
+                scores, labels, mse = get_scores_and_labels_from_generation(model, df_Y_test, testloader, X_test_tensor)
+            else:
+                scores, labels, mse = get_scores_and_labels(model_type, model, df_Y_test, testloader, X_test_tensor)
 
 
         confusion_matrix_metrics, alert_delays = evaluation_utils.compute_AUPR(labels, scores, threshold_jump=50)
+        #confusion_matrix_metrics, alert_delays = evaluation_utils.compute_metrics_with_pareto(labels, scores)
         print('[[TN, FP, FN, TP]]')
         print(confusion_matrix_metrics)
         print('Alert Delays : {}'.format(alert_delays))
@@ -99,8 +97,17 @@ def evaluate_models_from_folder(model_type, folder_path, batch_size, start_from=
 
         tn_fp_fn_tp = np.concatenate([tn_fp_fn_tp, confusion_matrix_metrics])
 
+        if cvae_generation:
+            save_metrics_folder_path = folder_path + '/cvae_generation'
+        else:
+            save_metrics_folder_path = folder_path
+        
 
-        f = open('{}/{}/{}_confusion_metrics.txt'.format(os.getcwd(),folder_path,machine_name), "w")
+        if not os.path.exists(save_metrics_folder_path):
+            os.makedirs(save_metrics_folder_path)
+
+
+        f = open('{}/{}/{}_confusion_metrics.txt'.format(os.getcwd(),save_metrics_folder_path,machine_name), "w")
         f.write('{} {} {} {}\n{}\n'.format(confusion_matrix_metrics[0,0],confusion_matrix_metrics[0,1],confusion_matrix_metrics[0,2],confusion_matrix_metrics[0,3], mse))
         for id, delay in enumerate(alert_delays):
             if id == 0:
@@ -143,12 +150,11 @@ def get_combined_metrics(save_dir):
             confusion_matrix_metrics = np.array([int(i) for i in confusion_matrix_metrics.split(' ')]).reshape(1,4)
             tn_fp_fn_tp = np.concatenate([tn_fp_fn_tp, confusion_matrix_metrics])
 
-            if len(lines) > 1:
+            if len(lines) > 2:
                 mse = float(lines[1])
 
                 alert_delays = lines[2]
-                alert_delays = alert_delays.split(' ')[1:]
-                alert_delays[-1] = alert_delays[-1][:-1]
+                alert_delays = alert_delays.split(' ')
                 alert_delays = np.array([int(i) for i in alert_delays])
 
 
@@ -168,12 +174,16 @@ def get_combined_metrics(save_dir):
 
 def main():
 
-    model_type='vae'
-    save_dir = 'saved_models/vae'
+    model_type='cvae'
+    save_dir = 'saved_models/cvae'
+    cvae_generation=True
 
-    #evaluate_models_from_folder(model_type, save_dir, 256, start_from='1-1')
-
-    get_combined_metrics(save_dir)
+    #evaluate_models_from_folder(model_type, save_dir, 256, cvae_generation=cvae_generation, start_from='1-1')
+    
+    if not cvae_generation:
+        get_combined_metrics(save_dir)
+    else:
+        get_combined_metrics(save_dir + '/cvae_generation')
 
 
 if __name__ == '__main__':
