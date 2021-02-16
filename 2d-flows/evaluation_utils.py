@@ -200,25 +200,50 @@ def compute_AUPR(labels, scores, threshold_jump=5):
 
     
     
-def evaluate_vae_model(model, X_tensor):
-    '''
-    X_tensor = X_tensor.cuda() if torch.cuda.is_available() else X_tensor.cpu()
-    X_tensor.to(device)
-    out_pred, _,_,_= model(X_tensor)
-    out_pred = out_pred.cpu().detach().numpy()
-        
-    idx = 0
-    preds=np.zeros((out_pred.shape[0]*out_pred.shape[2], out_pred.shape[3]))
+def compute_metrics_with_pareto(labels, scores):
 
-    window_size = X_tensor.shape[2]
+    initial_threshold = np.quantile(scores, .01)
+    #print('initial thresh: ' + str(initial_threshold))
+
+    tails = scores[scores < initial_threshold]
+    #fit pareto to tail
+    pareto = genpareto.fit(tails)
+    c, loc, scale = pareto
+    gamma = c
+    beta = scale
+
+    q = 10e-3 # desired probability to observe
+
+    N_prime = len(scores)
+    N_prime_th = (scores < initial_threshold).sum()
+    #print(N_prime_th)
+
+    final_threshold = initial_threshold - (beta/gamma) * ( np.power((q*N_prime)/N_prime_th, -gamma) - 1 )
+    #print(final_threshold)
+    #print('final thresh: ' + str(final_threshold))
     
-    time_idx=0
-    for i in range(len(out_pred)):
-        preds[time_idx:time_idx+window_size, :] = out_pred[i, 0, :window_size, :]
-        time_idx += window_size
+    #plt.plot(scores)
+    #plt.axhline(final_threshold, color='r')
+    #plt.show()
 
-    return preds
-    '''
+    anomaly_windows = get_anomaly_windows_i_j(labels)
+        
+    anomaly_preds, alert_delays = evaluate_adjusted_anomalies(anomaly_windows, scores, final_threshold)
+
+    precision = precision_score(labels, anomaly_preds)
+    recall = recall_score(labels, anomaly_preds)
+    f1 = f1_score(labels, anomaly_preds)
+    
+    print('F1 : {}, Precision : {}, Recall : {}'.format(f1, precision, recall))
+
+    tn, fp, fn, tp = confusion_matrix(labels, anomaly_preds).ravel()
+
+    return np.array([tn,fp,fn,tp]).reshape((1,4)), alert_delays
+
+
+
+
+
 
 
 
@@ -302,6 +327,140 @@ def evaluate_model_new(model, model_type, dataloader, X_tensor):
     return preds, scores, mse
 
 
+def evaluate_cvae_generation(model, dataloader, X_tensor):
+    model.eval()
+
+    dataiter = iter(dataloader)
+    x, y = dataiter.next()
+
+    preds = np.empty((0,x.shape[1],x.shape[2],x.shape[3]))
+    rec_mus = np.empty_like(preds)
+    rec_sigmas = np.empty_like(preds)
+    
+    reals = np.empty((0,x.shape[1],x.shape[2],x.shape[3]))
+
+    window_size = x.shape[2]
+    cond_window_size = y.shape[2]
+    num_feats = X_tensor.shape[-1]
+
+
+    for j, data in enumerate(dataloader, 0):
+
+        x, y = data
+        x = x.cuda() if torch.cuda.is_available() else x.cpu()
+        x.to(device)
+        y = y.cuda() if torch.cuda.is_available() else y.cpu()
+        y.to(device)
+
+        generated, rec_mu, rec_sigma, kl = model.generate(y)
+
+
+        preds = np.concatenate([preds, generated.cpu().detach().numpy()])
+        if model.prob_decoder:
+            rec_mus = np.concatenate([rec_mus, rec_mu.cpu().detach().numpy()])
+            rec_sigmas = np.concatenate([rec_sigmas, rec_sigma.cpu().detach().numpy()])
+        
+        reals = np.concatenate([reals, x.cpu().detach().numpy()])
+    
+
+    temp_preds=np.zeros((preds.shape[0]*cond_window_size, preds.shape[3]))
+    temp_reals=np.zeros((reals.shape[0]*cond_window_size, reals.shape[3]))
+        
+    time_idx=0
+    for i in range(len(preds)):
+        temp_preds[time_idx:time_idx+cond_window_size, :] = preds[i, 0, :cond_window_size, :]
+        temp_reals[time_idx:time_idx+cond_window_size, :] = reals[i, 0, :cond_window_size, :]
+        time_idx += cond_window_size
+
+    preds = temp_preds
+    reals = temp_reals
+
+
+    #get scores
+    if model.prob_decoder:
+        probs = []
+        mu_to_plot = []#np.zeros_like(reals)
+        sigma_to_plot = []#np.zeros_like(reals)
+        for i in range(rec_mus.shape[0]):
+            for j in range(cond_window_size):
+
+                mu_to_plot.append(rec_mus[i,0,j])
+                sigma_to_plot.append(rec_mus[i,0,j])
+
+                #probability of observed data point according to model
+                prob = multivariate_normal.logpdf(X_tensor[i, 0, j], rec_mus[i,0,j], np.exp(rec_sigmas[i,0,j]))
+                probs.append(prob)
+
+        scores = np.array(probs)
+    else:
+        scores = - (np.square(preds - reals)).mean(axis=1)
+
+    mse = mean_squared_error(reals, preds)
+    print('MSE : ' + str(np.round(mse,10)))
+
+
+
+    '''
+    num_per_row = 5
+    j = 0
+    while j < num_feats:
+        fig, axs = plt.subplots(1, num_per_row, figsize=(15,5))
+        for k in range(num_per_row):
+            if j+k >= num_feats:
+                break
+
+            axs[k].plot(reals[:, j+k], alpha=.5)
+            if model.prob_decoder:
+                axs[k].plot(mu_to_plot[:, j+k], alpha=.5)
+            else:
+                axs[k].plot(preds[:, j+k], alpha=.5)
+
+        plt.show()
+            
+        j += k
+    '''
+
+
+    return preds, reals, scores, mse
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def evaluate_vae_model(model, X_tensor):
+    '''
+    X_tensor = X_tensor.cuda() if torch.cuda.is_available() else X_tensor.cpu()
+    X_tensor.to(device)
+    out_pred, _,_,_= model(X_tensor)
+    out_pred = out_pred.cpu().detach().numpy()
+        
+    idx = 0
+    preds=np.zeros((out_pred.shape[0]*out_pred.shape[2], out_pred.shape[3]))
+
+    window_size = X_tensor.shape[2]
+    
+    time_idx=0
+    for i in range(len(out_pred)):
+        preds[time_idx:time_idx+window_size, :] = out_pred[i, 0, :window_size, :]
+        time_idx += window_size
+
+    return preds
+    '''
 
 def VAE_anomaly_detection(model, X_test_tensor, X_test_data, X_train_data, df_Y_test, initial_quantile_thresh):
 
