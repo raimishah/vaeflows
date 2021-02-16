@@ -207,8 +207,10 @@ def plot_reconstruction_prob_decoder(model, model_type, dataloader, X_tensor):
     mu_to_plot = np.array(mu_to_plot)
     sigma_to_plot = np.array(sigma_to_plot)
 
+
+    '''
     for i in range(mu_to_plot.shape[1]):
-        plt.figure(figsize=(20,6))
+        plt.figure(figsize=(15,5))
         plt.plot(reals[:, i],alpha=.5, label='real')
         plt.plot(mu_to_plot[:, i],alpha=.5, label='rec_mu')
         #plt.fill_between(np.arange(len(mu_to_plot[:, i])), mu_to_plot[:,i]-np.exp(sigma_to_plot[:,i]), mu_to_plot[:,i]+np.exp(sigma_to_plot[:,i]),alpha=0.2)
@@ -218,7 +220,23 @@ def plot_reconstruction_prob_decoder(model, model_type, dataloader, X_tensor):
         plt.legend()
         plt.show()
         plt.close()
+    '''
+    i=0
+    num_per_row=4
+    while(i < mu_to_plot.shape[1]):
+        fig, axs = plt.subplots(1, num_per_row, figsize=(15,5))
 
+        for j in range(num_per_row):
+            if i+j >= mu_to_plot.shape[1]:
+                break
+            axs[j].plot(reals[:,i+j],alpha=.5,label='real')
+            axs[j].plot(mu_to_plot[:,i+j],alpha=.5,label='pred')
+        
+            axs[j].legend()
+        plt.show()
+        plt.close()
+
+        i += j
 
 
 def read_machine_data(machine_name, window_size, batch_size):
