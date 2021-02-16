@@ -121,11 +121,11 @@ class Trainer(nn.Module):
 
                         #_, rec, _, _ = model.loss_function(outputs, x, rec_mu, rec_sigma, kl)
 
-                        val_loss = rec 
+                        val_loss = rec
                         if(np.isnan(val_loss.item())):
                             print("Noped out in validation at", epoch, j, kl, rec_comps)
-                            flag = True
-                            break
+                            #flag = True
+                            #break
 
                         if self.es_val.step(val_loss):
                             early_stopped_val=True
