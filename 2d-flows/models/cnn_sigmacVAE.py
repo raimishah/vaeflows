@@ -266,3 +266,29 @@ class CNN_sigmacVAE(nn.Module):
             rec_mu_sigma_loss = self.gaussian_nll(rec_mu, rec_sigma, x).sum()
         
         return rec_comps, rec, rec_mu_sigma_loss, kl
+
+
+
+    def generate(self, c):
+        #if torch.cuda.is_available():
+        c = c.to(device)
+
+        mu = torch.zeros(c.shape[0], self.latent_dim).to(device)
+        log_var = torch.zeros(c.shape[0], self.latent_dim).to(device)
+        
+        z_params = (mu, log_var)
+
+        if self.flow_type == None:
+            z = self.sampling(mu, log_var)
+            output, rec_mu, rec_sigma = self.decoder(z, c)
+            kl = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
+
+        else:
+            if self.flow_type =='Planar':
+                z_k, kl = self.latent_planar(x, z_params)
+            else:
+                z_k, kl = self.latent_not_planar(x, z_params, c)
+            
+            output, rec_mu, rec_sigma = self.decoder(z_k, c)
+    
+        return output, rec_mu, rec_sigma, kl
