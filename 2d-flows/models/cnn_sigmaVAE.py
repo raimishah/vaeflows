@@ -176,10 +176,13 @@ class CNN_sigmaVAE(nn.Module):
         self.conv3 = nn.Conv2d(in_channels=16, out_channels=4, kernel_size=5, stride=1, padding=0)
         self.bn3 = nn.BatchNorm2d(4)
 
-        self.fc41 = nn.Linear(4*20*26, self.latent_dim)
-        self.fc42 = nn.Linear(4*20*26, self.latent_dim)
+        #self.fc41 = nn.Linear(4*20*26, self.latent_dim)
+        #self.fc42 = nn.Linear(4*20*26, self.latent_dim)
+        self.fc41 = nn.Linear(4*20*(num_feats-12), self.latent_dim)
+        self.fc42 = nn.Linear(4*20*(num_feats-12), self.latent_dim)
 
-        self.defc1 = nn.Linear(self.latent_dim, 4*20*26)
+        #self.defc1 = nn.Linear(self.latent_dim, 4*20*26)
+        self.defc1 = nn.Linear(self.latent_dim, 4*20*(num_feats-12))
         
         self.deconv1 = nn.ConvTranspose2d(in_channels=4, out_channels=16, kernel_size=5, stride=1, padding=0, output_padding=0)
         self.debn1 = nn.BatchNorm2d(16)
@@ -256,11 +259,9 @@ class CNN_sigmaVAE(nn.Module):
         return eps.mul(std).add(mu) # return z sample
     
     def decoder(self, z):
-        
         concat_input = z #torch.cat([z, c], 2)
         concat_input = self.defc1(concat_input)
         concat_input = concat_input.view(concat_input.size(0), self.saved_dim[0], self.saved_dim[1], self.saved_dim[2])
-
 
         h = self.debn1(F.relu(self.deconv1(concat_input)))
         h = self.debn2(F.relu(self.deconv2(h)))
