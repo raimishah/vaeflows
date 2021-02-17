@@ -141,12 +141,12 @@ def main():
     flow_type=None
     prob_decoder=True
 
-    print('Trainig with {}, with flow - {}, and prob decoder - {}'.format(model_type, flow_type, prob_decoder))
+    print('Training with {}, with flow - {}, and prob decoder - {}'.format(model_type, flow_type, prob_decoder))
 
     batch_size=256
     latent_dim=10
     num_feats=25
-    window_size=32
+    window_size=100
     num_epochs=10
     lr = .005 if flow_type==None else .0005
     early_stop_patience=100 if flow_type==None else 100
