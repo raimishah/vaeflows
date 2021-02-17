@@ -24,10 +24,8 @@ from trainer import Trainer
 import utils
 
 from utils import softclip
-from models.cnn_sigmaVAE import CNN_sigmaVAE
+from models.cnn_sigmaVAE_msl import CNN_sigmaVAE
 from models.cnn_sigmacVAE import CNN_sigmacVAE
-from models.cnn_sigmaVAE_flow import CNN_sigmaVAE_flow
-from models.cnn_sigmacVAE_flow import CNN_sigmacVAE_flow
 
 
 import evaluation_utils
@@ -141,14 +139,14 @@ def main():
 
     model_type='vae'
     flow_type=None
-    prob_decoder=True
+    prob_decoder=False
 
-    print('Trainig with {}, with flow - {}, and prob decoder - {}'.format(model_type, flow_type, prob_decoder))
+    print('Training with {}, with flow - {}, and prob decoder - {}'.format(model_type, flow_type, prob_decoder))
 
     batch_size=256
     latent_dim=10
     num_feats=55
-    window_size=32
+    window_size=100
     num_epochs=10
     lr = .005 if flow_type==None else .0005
     early_stop_patience=100 if flow_type==None else 100
