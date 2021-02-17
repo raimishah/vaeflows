@@ -24,10 +24,8 @@ from trainer import Trainer
 import utils
 
 from utils import softclip
-from models.cnn_sigmaVAE import CNN_sigmaVAE
+from models.cnn_sigmaVAE_smap import CNN_sigmaVAE
 from models.cnn_sigmacVAE import CNN_sigmacVAE
-from models.cnn_sigmaVAE_flow import CNN_sigmaVAE_flow
-from models.cnn_sigmacVAE_flow import CNN_sigmacVAE_flow
 
 
 import evaluation_utils
