@@ -122,7 +122,7 @@ def main():
     flow_type='MAF'
     prob_decoder=True
 
-    print('Trainig with {}, with flow - {}, and prob decoder - {}'.format(model_type, flow_type, prob_decoder))
+    print('Training with {}, with flow - {}, and prob decoder - {}'.format(model_type, flow_type, prob_decoder))
 
     batch_size=256
     latent_dim=10
