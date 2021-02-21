@@ -54,16 +54,16 @@ def train_and_eval_on_SMAP(model_type, model, num_epochs, learning_rate, window_
     valloader=None
     if 'cvae' not in model_type:
         if not use_validation:
-            X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data('../../datasets/ServerMachineDataset/' + machine_name, window_size, batch_size)
+            X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data('../../datasets/ServerMachineDataset/' + machine_name, window_size, model.jump_size, batch_size)
         else:
-            X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, valloader, testloader = utils.read_machine_data_with_validation('../../datasets/ServerMachineDataset/' + machine_name, window_size, batch_size, val_size=.3)
+            X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, valloader, testloader = utils.read_machine_data_with_validation('../../datasets/ServerMachineDataset/' + machine_name, window_size, model.jump_size, batch_size, val_size=.3)
 
 
     else:
         if not use_validation:
-            X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data_cvae('../../datasets/ServerMachineDataset/' + machine_name, window_size, cond_window_size, batch_size)
+            X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data_cvae('../../datasets/ServerMachineDataset/' + machine_name, window_size, cond_window_size, model.jump_size, batch_size)
         else:
-            X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, valloader, testloader = utils.read_machine_data_cvae_with_validation('../../datasets/ServerMachineDataset/' + machine_name, window_size, cond_window_size, batch_size, val_size=.3)
+            X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, valloader, testloader = utils.read_machine_data_cvae_with_validation('../../datasets/ServerMachineDataset/' + machine_name, window_size, cond_window_size, model.jump_size, batch_size, val_size=.3)
 
     print(X_train_tensor.shape)
 
@@ -144,6 +144,7 @@ def main():
     print('Training with {}, with flow - {}, and prob decoder - {}'.format(model_type, flow_type, prob_decoder))
 
     batch_size=256
+    jump_size=100
     latent_dim=10
     num_feats=25
     window_size=100
@@ -153,14 +154,14 @@ def main():
 
     if model_type=='vae':
         cond_window_size=-1
-        model = CNN_sigmaVAE(latent_dim=latent_dim, window_size=window_size, num_feats=num_feats, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
+        model = CNN_sigmaVAE(latent_dim=latent_dim, window_size=window_size, jump_size=jump_size, num_feats=num_feats, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
         model.cuda() if torch.cuda.is_available() else model.cpu()
         print(model)
 
 
     elif model_type=='cvae':	
         cond_window_size=13
-        model = CNN_sigmacVAE(latent_dim=latent_dim, window_size=window_size, cond_window_size=cond_window_size ,num_feats=num_feats, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
+        model = CNN_sigmacVAE(latent_dim=latent_dim, window_size=window_size, cond_window_size=cond_window_size, jump_size=jump_size, num_feats=num_feats, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
         print(model)
             
     train_and_eval_on_SMAP(model_type, model, num_epochs, lr, window_size, cond_window_size, batch_size, early_stop_patience=early_stop_patience, use_validation=True)

@@ -29,10 +29,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class CNN_sigmaVAE(nn.Module):
 
-    def __init__(self,latent_dim=10, window_size=32, num_feats=38, flow_type=None, use_probabilistic_decoder=False):
+    def __init__(self,latent_dim=10, window_size=32, jump_size=32, num_feats=38, flow_type=None, use_probabilistic_decoder=False):
         super(CNN_sigmaVAE, self).__init__()
     
         self.window_size = window_size
+        self.jump_size = jump_size
         self.latent_dim = latent_dim
         self.prob_decoder = use_probabilistic_decoder
         self.num_feats = num_feats

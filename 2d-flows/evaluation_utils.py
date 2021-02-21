@@ -261,6 +261,7 @@ def evaluate_model_new(model, model_type, dataloader, X_tensor):
 
     window_size = x.shape[2]
     cond_window_size = y.shape[2]
+    jump_size = model.jump_size
 
     for j, data in enumerate(dataloader, 0):
 
@@ -282,6 +283,18 @@ def evaluate_model_new(model, model_type, dataloader, X_tensor):
         reals = np.concatenate([reals, x.cpu().detach().numpy()])
     
 
+    temp_preds=np.zeros((preds.shape[0]*jump_size, preds.shape[3]))
+    temp_reals=np.zeros((preds.shape[0]*jump_size, preds.shape[3]))
+    time_idx=0
+    for i in range(len(preds)):
+        temp_preds[time_idx:time_idx+jump_size, :] = preds[i, 0, :jump_size, :]
+        temp_reals[time_idx:time_idx+jump_size, :] = reals[i, 0, :jump_size, :]
+        time_idx += jump_size
+
+    preds = temp_preds
+    reals = temp_reals
+
+    '''
     if model_type=='cvae':
         temp_preds=np.zeros((preds.shape[0]*cond_window_size, preds.shape[3]))
         temp_reals=np.zeros((reals.shape[0]*cond_window_size, reals.shape[3]))
@@ -298,7 +311,7 @@ def evaluate_model_new(model, model_type, dataloader, X_tensor):
     else:
         preds = np.reshape(preds, (preds.shape[0] * preds.shape[2], preds.shape[3]))
         reals = np.reshape(reals, (reals.shape[0] * reals.shape[2], reals.shape[3]))
-
+    '''
 
 
     #get scores
@@ -307,10 +320,11 @@ def evaluate_model_new(model, model_type, dataloader, X_tensor):
         mu_to_plot = []#np.zeros_like(reals)
         sigma_to_plot = []#np.zeros_like(reals)
         for i in range(rec_mus.shape[0]):
-            for j in range(cond_window_size):
+            #for j in range(cond_window_size):
+            for j in range(jump_size):
 
                 mu_to_plot.append(rec_mus[i,0,j])
-                sigma_to_plot.append(rec_mus[i,0,j])
+                sigma_to_plot.append(rec_sigmas[i,0,j])
 
                 #probability of observed data point according to model
                 prob = multivariate_normal.logpdf(X_tensor[i, 0, j], rec_mus[i,0,j], np.exp(rec_sigmas[i,0,j]))
@@ -341,6 +355,7 @@ def evaluate_cvae_generation(model, dataloader, X_tensor):
 
     window_size = x.shape[2]
     cond_window_size = y.shape[2]
+    jump_size = model.jump_size
     num_feats = X_tensor.shape[-1]
 
 
@@ -363,14 +378,14 @@ def evaluate_cvae_generation(model, dataloader, X_tensor):
         reals = np.concatenate([reals, x.cpu().detach().numpy()])
     
 
-    temp_preds=np.zeros((preds.shape[0]*cond_window_size, preds.shape[3]))
-    temp_reals=np.zeros((reals.shape[0]*cond_window_size, reals.shape[3]))
+    temp_preds=np.zeros((preds.shape[0]*jump_size, preds.shape[3]))
+    temp_reals=np.zeros((reals.shape[0]*jump_size, reals.shape[3]))
         
     time_idx=0
     for i in range(len(preds)):
-        temp_preds[time_idx:time_idx+cond_window_size, :] = preds[i, 0, :cond_window_size, :]
-        temp_reals[time_idx:time_idx+cond_window_size, :] = reals[i, 0, :cond_window_size, :]
-        time_idx += cond_window_size
+        temp_preds[time_idx:time_idx+jump_size, :] = preds[i, 0, :jump_size, :]
+        temp_reals[time_idx:time_idx+jump_size, :] = reals[i, 0, :jump_size, :]
+        time_idx += jump_size
 
     preds = temp_preds
     reals = temp_reals
@@ -382,7 +397,8 @@ def evaluate_cvae_generation(model, dataloader, X_tensor):
         mu_to_plot = []#np.zeros_like(reals)
         sigma_to_plot = []#np.zeros_like(reals)
         for i in range(rec_mus.shape[0]):
-            for j in range(cond_window_size):
+            #for j in range(cond_window_size):
+            for j in range(jump_size):
 
                 mu_to_plot.append(rec_mus[i,0,j])
                 sigma_to_plot.append(rec_mus[i,0,j])

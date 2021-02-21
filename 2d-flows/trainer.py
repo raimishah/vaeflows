@@ -69,7 +69,8 @@ class Trainer(nn.Module):
                 loss = rec + kl + rec_mu_sigma_loss
 
                 if(np.isnan(loss.item())):
-                    print("Noped out at", epoch, j, kl, rec_comps)
+                    #print("Noped out at", epoch, j, kl, rec_comps)
+                    print("Noped out at epoch ", epoch)
                     flag = True
                     break
 
@@ -123,15 +124,18 @@ class Trainer(nn.Module):
 
                         val_loss = rec
                         if(np.isnan(val_loss.item())):
-                            print("Noped out in validation at", epoch, j, kl, rec_comps)
+                            #print("Noped out in validation at", epoch, j, kl, rec_comps)
+                            print("Nan in Validation at ", epoch)
                             #flag = True
                             #break
 
                         if self.es_val.step(val_loss):
                             early_stopped_val=True
-                            if early_stopped_train:
-                                early_stopped=True
-                                break
+                            #if early_stopped_train:
+                            #    early_stopped=True
+                            #    break
+                            early_stopped=True
+                            break
 
                 self.val_losses.append(val_loss.item())
                 

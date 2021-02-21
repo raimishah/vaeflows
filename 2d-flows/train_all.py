@@ -37,7 +37,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 
-def train_model_on_all_datasets(model_type, model, num_epochs, learning_rate, window_size, cond_window_size, batch_size, early_stop_patience=100, start_from='1-1', use_validation=False):
+def train_model_on_all_datasets(model_type, model, num_epochs, learning_rate, window_size, cond_window_size, jump_size, batch_size, early_stop_patience=100, start_from='1-1', use_validation=False):
 
     #dataset_1
     machine_names = ['1-1', '1-2','1-3','1-4','1-5','1-6','1-7','1-8','2-1','2-2','2-3','2-4','2-5','2-6','2-7','2-8','2-9','3-1','3-2','3-3','3-4','3-5','3-6','3-7','3-8','3-9','3-10','3-11']
@@ -61,16 +61,16 @@ def train_model_on_all_datasets(model_type, model, num_epochs, learning_rate, wi
             valloader=None
             if 'cvae' not in model_type:
                 if not use_validation:
-                    X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data('../../datasets/ServerMachineDataset/machine-' + machine_name, window_size, batch_size)
+                    X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data('../../datasets/ServerMachineDataset/machine-' + machine_name, window_size, jump_size, batch_size)
                 else:
-                    X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, valloader, testloader = utils.read_machine_data_with_validation('../../datasets/ServerMachineDataset/machine-' + machine_name, window_size, batch_size, val_size=.3)
+                    X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, valloader, testloader = utils.read_machine_data_with_validation('../../datasets/ServerMachineDataset/machine-' + machine_name, window_size, jump_size, batch_size, val_size=.3)
 
 
             else:
                 if not use_validation:
-                    X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data_cvae('../../datasets/ServerMachineDataset/machine-' +machine_name, window_size, cond_window_size, batch_size)
+                    X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data_cvae('../../datasets/ServerMachineDataset/machine-' +machine_name, window_size, cond_window_size, jump_size, batch_size)
                 else:
-                    X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, valloader, testloader = utils.read_machine_data_cvae_with_validation('../../datasets/ServerMachineDataset/machine-' +machine_name, window_size, cond_window_size, batch_size, val_size=.3)
+                    X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, valloader, testloader = utils.read_machine_data_cvae_with_validation('../../datasets/ServerMachineDataset/machine-' +machine_name, window_size, cond_window_size, jump_size, batch_size, val_size=.3)
 
             trainer = Trainer(data_name = machine_name, model_type = model_type, flow_type=model.flow_type, early_stop_patience=early_stop_patience)
             model, flag = trainer.train_model(model, num_epochs=num_epochs, learning_rate=learning_rate, trainloader=trainloader, valloader=valloader)
@@ -118,33 +118,35 @@ def main():
 
     '''
 
-    model_type='cvae'
-    flow_type='MAF'
-    prob_decoder=True
+    model_type='vae'
+    flow_type=None
+    prob_decoder=False
 
     print('Training with {}, with flow - {}, and prob decoder - {}'.format(model_type, flow_type, prob_decoder))
+    print(model_type, flow_type, prob_decoder)
 
     batch_size=256
     latent_dim=10
     num_feats=38
-    window_size=32
-    num_epochs=5
-    lr = .005 if flow_type==None else .0005
-    early_stop_patience=100 if flow_type==None else 100
+    window_size=100
+    jump_size=32
+    num_epochs=2000
+    lr = .005 if flow_type==None else .005
+    early_stop_patience=500 if flow_type==None else 500
 
     if model_type=='vae':
         cond_window_size=-1
-        model = CNN_sigmaVAE(latent_dim=latent_dim, window_size=window_size, num_feats=num_feats, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
+        model = CNN_sigmaVAE(latent_dim=latent_dim, window_size=window_size, jump_size=jump_size, num_feats=num_feats, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
         model.cuda() if torch.cuda.is_available() else model.cpu()
         print(model)
 
 
     elif model_type=='cvae':	
-        cond_window_size=13
-        model = CNN_sigmacVAE(latent_dim=latent_dim, window_size=window_size, cond_window_size=cond_window_size ,num_feats=num_feats, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
+        cond_window_size=49
+        model = CNN_sigmacVAE(latent_dim=latent_dim, window_size=window_size, cond_window_size=cond_window_size, jump_size=jump_size, num_feats=num_feats, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
         print(model)
             
-    train_model_on_all_datasets(model_type, model, num_epochs, lr, window_size, cond_window_size, batch_size, early_stop_patience=early_stop_patience, start_from='2-8', use_validation=True)
+    train_model_on_all_datasets(model_type, model, num_epochs, lr, window_size, cond_window_size, jump_size, batch_size, early_stop_patience=early_stop_patience, start_from='1-6', use_validation=True)
 
 if __name__=='__main__':
 	main()

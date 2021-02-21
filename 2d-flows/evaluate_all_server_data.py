@@ -75,12 +75,12 @@ def evaluate_models_from_folder(model_type, folder_path, batch_size, cvae_genera
         print(machine_name)
 
         if model_type=='vae':
-            X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data('../ServerMachineDataset/machine-' + machine_name, model.window_size, batch_size)
+            X_train_data, X_test_data, X_train_tensor, X_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data('../ServerMachineDataset/machine-' + machine_name, model.window_size, model.jump_size, batch_size)
             
             scores, labels, mse = get_scores_and_labels(model_type, model, df_Y_test, testloader, X_test_tensor)
 
         if model_type=='cvae':
-            X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data_cvae('../ServerMachineDataset/machine-' + machine_name, model.window_size, model.cond_window_size, batch_size)
+            X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, testloader = utils.read_machine_data_cvae('../ServerMachineDataset/machine-' + machine_name, model.window_size, model.cond_window_size, model.jump_size, batch_size)
             
             if cvae_generation:
                 scores, labels, mse = get_scores_and_labels_from_generation(model, df_Y_test, testloader, X_test_tensor)

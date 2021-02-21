@@ -39,7 +39,7 @@ class CNN_sigmaVAE(nn.Module):
         self.num_feats = num_feats
         self.flow_type = flow_type
         
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=(3,3), stride=1, padding=0)
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=(3,4), stride=1, padding=0)
         self.bn1 = nn.BatchNorm2d(8)
         self.conv2 = nn.Conv2d(in_channels=8, out_channels=32, kernel_size=(3,3), stride=1, padding=0)
         self.bn2 = nn.BatchNorm2d(32)
@@ -54,7 +54,7 @@ class CNN_sigmaVAE(nn.Module):
         self.unpool2x2 = nn.MaxUnpool2d((2,2))
         self.pool2x2_idxs = []
 
-        lin_layer= 42*11
+        lin_layer= 43*20
         self.fc41 = nn.Linear(4*lin_layer, self.latent_dim)
         self.fc42 = nn.Linear(4*lin_layer, self.latent_dim)
 
@@ -68,7 +68,7 @@ class CNN_sigmaVAE(nn.Module):
         self.debn3 = nn.BatchNorm2d(32)
         self.deconv4 = nn.ConvTranspose2d(in_channels=32, out_channels=8, kernel_size=(3,3), stride=1, padding=0, output_padding=0)
         self.debn4 = nn.BatchNorm2d(8)
-        self.deconv5 = nn.ConvTranspose2d(in_channels=8, out_channels=1, kernel_size=(3,3), stride=1, padding=0, output_padding=0)
+        self.deconv5 = nn.ConvTranspose2d(in_channels=8, out_channels=1, kernel_size=(3,4), stride=1, padding=0, output_padding=0)
         
         self.log_sigma = 0
         self.log_sigma = torch.nn.Parameter(torch.full((1,), 0.0)[0], requires_grad=True)
@@ -125,11 +125,13 @@ class CNN_sigmaVAE(nn.Module):
         
         h = F.relu(self.conv1(concat_input))
         h = self.bn2(F.relu(self.conv2(h)))
-        h, pool_idxs = self.pool2x2(h)
-        self.pool2x2_idxs.append(pool_idxs)
+        #h, pool_idxs = self.pool2x2(h)
+        #self.pool2x2_idxs.append(pool_idxs)
+        #print('shape after pooling {}'.format(h.shape))
 
         h= self.bn3(F.relu(self.conv3(h)))
-        #end here after 3 layers
+        h, pool_idxs = self.pool2x2(h)
+        self.pool2x2_idxs.append(pool_idxs)
 
         h = self.bn4(F.relu(self.conv4(h)))
         h = self.bn5(F.relu(self.conv5(h)))
@@ -141,7 +143,6 @@ class CNN_sigmaVAE(nn.Module):
         mu, var = self.fc41(h), self.fc42(h)
                 
         return self.fc41(h), self.fc42(h)
-
     
     def sampling(self, mu, log_var):
         std = torch.exp(0.5*log_var)
@@ -158,11 +159,9 @@ class CNN_sigmaVAE(nn.Module):
 
         h = self.debn1(F.relu(self.deconv1(concat_input)))
         h = self.debn2(F.relu(self.deconv2(h)))
-        #out = torch.sigmoid(self.deconv3(h))
-        #end here after 3 layers
-        h = self.debn3(F.relu(self.deconv3(h)))
         h = self.unpool2x2(h, self.pool2x2_idxs[-1])
         self.pool2x2_idxs.pop()
+        h = self.debn3(F.relu(self.deconv3(h)))
         h = self.debn4(F.relu(self.deconv4(h)))
         out = torch.sigmoid(self.deconv5(h))
         
@@ -281,11 +280,8 @@ class CNN_sigmaVAE(nn.Module):
 
     
     def loss_function(self, recon_x, x, rec_mu, rec_sigma, kl):
-        if self.prob_decoder:
-            rec_comps, rec = self.reconstruction_loss(rec_mu, x)
-        else:
-            rec_comps, rec = self.reconstruction_loss(recon_x, x)
-
+        
+        rec_comps, rec = self.reconstruction_loss(recon_x, x)
         rec_mu_sigma_loss = 0
         if self.prob_decoder:
             rec_mu_sigma_loss = self.gaussian_nll(rec_mu, rec_sigma, x).sum()
@@ -299,11 +295,10 @@ class CNN_sigmaVAE(nn.Module):
 #3 layer -- 32 window size
 class CNN_sigmaVAE(nn.Module):
 
-    def __init__(self,latent_dim=10, window_size=32, jump_size=32, num_feats=38, flow_type=None, use_probabilistic_decoder=False):
+    def __init__(self,latent_dim=10, window_size=32, num_feats=38, flow_type=None, use_probabilistic_decoder=False):
         super(CNN_sigmaVAE, self).__init__()
     
         self.window_size = window_size
-        self.jump_size = window_size
         self.latent_dim = latent_dim
         self.prob_decoder = use_probabilistic_decoder
         self.num_feats = num_feats

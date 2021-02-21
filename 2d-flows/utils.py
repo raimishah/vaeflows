@@ -77,6 +77,7 @@ def plot_reconstruction(model, model_type, dataloader):
     reals = np.empty((0,x.shape[1],x.shape[2],x.shape[3]))
 
     cond_window_size=y.shape[2]
+    jump_size = model.jump_size
 
     for j, data in enumerate(dataloader, 0):
 
@@ -93,14 +94,30 @@ def plot_reconstruction(model, model_type, dataloader):
         preds = np.concatenate([preds, outputs.cpu().detach().numpy()])
         reals = np.concatenate([reals, x.cpu().detach().numpy()])
     
+
+    temp_preds=np.zeros((preds.shape[0]*jump_size, preds.shape[3]))
+    temp_reals=np.zeros((preds.shape[0]*jump_size, preds.shape[3]))
+    time_idx=0
+    for i in range(len(preds)):
+        temp_preds[time_idx:time_idx+jump_size, :] = preds[i, 0, :jump_size, :]
+        temp_reals[time_idx:time_idx+jump_size, :] = reals[i, 0, :jump_size, :]
+        time_idx += jump_size
+
+    preds = temp_preds
+    reals = temp_reals
+    
+    '''
     if model_type=='cvae':
         temp_preds=np.zeros((preds.shape[0]*cond_window_size, preds.shape[3]))
         temp_reals=np.zeros((preds.shape[0]*cond_window_size, preds.shape[3]))
         time_idx=0
         for i in range(len(preds)):
-            temp_preds[time_idx:time_idx+cond_window_size, :] = preds[i, 0, :cond_window_size, :]
-            temp_reals[time_idx:time_idx+cond_window_size, :] = reals[i, 0, :cond_window_size, :]
-            time_idx += cond_window_size
+            #temp_preds[time_idx:time_idx+cond_window_size, :] = preds[i, 0, :cond_window_size, :]
+            #temp_reals[time_idx:time_idx+cond_window_size, :] = reals[i, 0, :cond_window_size, :]
+            #time_idx += cond_window_size
+            temp_preds[time_idx:time_idx+jump_size, :] = preds[i, 0, :jump_size, :]
+            temp_reals[time_idx:time_idx+jump_size, :] = reals[i, 0, :jump_size, :]
+            time_idx += jump_size
 
         preds = temp_preds
         reals = temp_reals
@@ -108,6 +125,7 @@ def plot_reconstruction(model, model_type, dataloader):
     else:
         preds = np.reshape(preds, (preds.shape[0] * preds.shape[2], preds.shape[3]))
         reals = np.reshape(reals, (reals.shape[0] * reals.shape[2], reals.shape[3]))
+    '''
 
     i=0
     num_per_row=4
@@ -146,6 +164,7 @@ def plot_reconstruction_prob_decoder(model, model_type, dataloader, X_tensor):
 
     window_size = x.shape[2]
     cond_window_size = y.shape[2]
+    jump_size = model.jump_size
 
     for j, data in enumerate(dataloader, 0):
 
@@ -166,6 +185,18 @@ def plot_reconstruction_prob_decoder(model, model_type, dataloader, X_tensor):
         reals = np.concatenate([reals, x.cpu().detach().numpy()])
     
 
+    temp_preds=np.zeros((preds.shape[0]*jump_size, preds.shape[3]))
+    temp_reals=np.zeros((preds.shape[0]*jump_size, preds.shape[3]))
+    time_idx=0
+    for i in range(len(preds)):
+        temp_preds[time_idx:time_idx+jump_size, :] = preds[i, 0, :jump_size, :]
+        temp_reals[time_idx:time_idx+jump_size, :] = reals[i, 0, :jump_size, :]
+        time_idx += jump_size
+
+    preds = temp_preds
+    reals = temp_reals
+    
+    '''
     if model_type=='cvae':
         temp_preds=np.zeros((preds.shape[0]*cond_window_size, preds.shape[3]))
         temp_reals=np.zeros((reals.shape[0]*cond_window_size, reals.shape[3]))
@@ -182,16 +213,17 @@ def plot_reconstruction_prob_decoder(model, model_type, dataloader, X_tensor):
     else:
         preds = np.reshape(preds, (preds.shape[0] * preds.shape[2], preds.shape[3]))
         reals = np.reshape(reals, (reals.shape[0] * reals.shape[2], reals.shape[3]))
-
+    '''
 
     probs = []
     mu_to_plot = []#np.zeros_like(reals)
     sigma_to_plot = []#np.zeros_like(reals)
     for i in range(rec_mus.shape[0]):
-        for j in range(cond_window_size):
+        #for j in range(cond_window_size):
+        for j in range(jump_size):
 
             mu_to_plot.append(rec_mus[i,0,j])
-            sigma_to_plot.append(rec_mus[i,0,j])
+            sigma_to_plot.append(rec_sigmas[i,0,j])
 
             #probability of observed data point according to model
             prob = multivariate_normal.logpdf(X_tensor[i, 0, j], rec_mus[i,0,j], np.exp(rec_sigmas[i,0,j]))
@@ -239,7 +271,7 @@ def plot_reconstruction_prob_decoder(model, model_type, dataloader, X_tensor):
         i += j
 
 
-def read_machine_data(machine_name, window_size, batch_size):
+def read_machine_data(machine_name, window_size, jump_size, batch_size):
     
     X_train = pd.read_pickle(machine_name + '_train.pkl')
     X_test = pd.read_pickle(machine_name + '_test.pkl')
@@ -253,13 +285,14 @@ def read_machine_data(machine_name, window_size, batch_size):
 
     #window it
     window = window_size
+    jump = jump_size
     X_train = []
     X_test = []
     
-    for i in range(0, X_train_data.shape[0]-window+1, window):
+    for i in range(0, X_train_data.shape[0]-window+1, jump):
         X_train.append([X_train_data[i:i+window]])
 
-    for i in range(0, X_test_data.shape[0]-window+1, window):
+    for i in range(0, X_test_data.shape[0]-window+1, jump):
         X_test.append([X_test_data[i:i+window]])
         
     X_train = np.array(X_train)
@@ -279,7 +312,7 @@ def read_machine_data(machine_name, window_size, batch_size):
 
     
 
-def read_machine_data_with_validation(machine_name, window_size, batch_size, val_size=.3):
+def read_machine_data_with_validation(machine_name, window_size, jump_size, batch_size, val_size=.3):
     
     X_train = pd.read_pickle(machine_name + '_train.pkl')
     X_test = pd.read_pickle(machine_name + '_test.pkl')
@@ -292,13 +325,14 @@ def read_machine_data_with_validation(machine_name, window_size, batch_size, val
 
     #window it
     window = window_size
+    jump = jump_size
     X_train = []
     X_test = []
     
-    for i in range(0, X_train_data.shape[0]-window+1, window):
+    for i in range(0, X_train_data.shape[0]-window+1, jump):
         X_train.append([X_train_data[i:i+window]])
 
-    for i in range(0, X_test_data.shape[0]-window+1, window):
+    for i in range(0, X_test_data.shape[0]-window+1, jump):
         X_test.append([X_test_data[i:i+window]])
         
     X_train = np.array(X_train)
@@ -328,7 +362,7 @@ def read_machine_data_with_validation(machine_name, window_size, batch_size, val
 
 
     
-def read_machine_data_cvae(machine_name, window_size, cond_window_size, batch_size):
+def read_machine_data_cvae(machine_name, window_size, cond_window_size, jump_size, batch_size):
     
     X_train = pd.read_pickle(machine_name + '_train.pkl')
     X_test = pd.read_pickle(machine_name + '_test.pkl')
@@ -342,10 +376,11 @@ def read_machine_data_cvae(machine_name, window_size, cond_window_size, batch_si
 
     #train data first
     window_size = window_size
+    jump = jump_size
     X_train = []
     cond_train = []
 
-    for i in range(0, X_train_data.shape[0]-cond_window_size-window_size+1, cond_window_size):
+    for i in range(0, X_train_data.shape[0]-cond_window_size-window_size+1, jump):
         X_train.append([X_train_data[i + cond_window_size : i + cond_window_size + window_size]])
         cond_train.append([X_train_data[i : i + cond_window_size]])
         
@@ -364,7 +399,7 @@ def read_machine_data_cvae(machine_name, window_size, cond_window_size, batch_si
     X_test.append([X_test_data[0:window_size]])
     cond_test.append([X_train_data[-cond_window_size:]])
         
-    for i in range(0, X_test_data.shape[0]-cond_window_size-window_size+1, cond_window_size):
+    for i in range(0, X_test_data.shape[0]-cond_window_size-window_size+1, jump):
         X_test.append([X_test_data[i+cond_window_size:i+cond_window_size+window_size]])
         cond_test.append([X_test_data[i:i+cond_window_size]])
 
@@ -380,7 +415,7 @@ def read_machine_data_cvae(machine_name, window_size, cond_window_size, batch_si
 
 
 
-def read_machine_data_cvae_with_validation(machine_name, window_size, cond_window_size, batch_size, val_size=.3):
+def read_machine_data_cvae_with_validation(machine_name, window_size, cond_window_size, jump_size, batch_size, val_size=.3):
     
     X_train = pd.read_pickle(machine_name + '_train.pkl')
     X_test = pd.read_pickle(machine_name + '_test.pkl')
@@ -394,10 +429,11 @@ def read_machine_data_cvae_with_validation(machine_name, window_size, cond_windo
 
     #train data first
     window_size = window_size
+    jump = jump_size
     X_train = []
     cond_train = []
 
-    for i in range(0, X_train_data.shape[0]-cond_window_size-window_size+1, cond_window_size):
+    for i in range(0, X_train_data.shape[0]-cond_window_size-window_size+1, jump):
         X_train.append([X_train_data[i + cond_window_size : i + cond_window_size + window_size]])
         cond_train.append([X_train_data[i : i + cond_window_size]])
         
@@ -424,7 +460,7 @@ def read_machine_data_cvae_with_validation(machine_name, window_size, cond_windo
     X_test.append([X_test_data[0:window_size]])
     cond_test.append([X_train_data[-cond_window_size:]])
         
-    for i in range(0, X_test_data.shape[0]-cond_window_size-window_size+1, cond_window_size):
+    for i in range(0, X_test_data.shape[0]-cond_window_size-window_size+1, jump):
         X_test.append([X_test_data[i+cond_window_size:i+cond_window_size+window_size]])
         cond_test.append([X_test_data[i:i+cond_window_size]])
 
