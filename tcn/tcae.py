@@ -7,7 +7,7 @@ from torch.autograd import Variable
 import torch.optim as optim
 import torch.nn.functional as F
 
-
+'''
 class Encoder1D(nn.Module):
     def __init__(self, window_size=32, num_feats=1, num_levels=3, kernel_size=3):
         super(Encoder1D, self).__init__()
@@ -125,7 +125,7 @@ class Decoder1D(nn.Module):
 #encoder_out = enc_model(x_1d)
 #dec_model = Decoder1D(num_levels=4)
 #decoder_out = dec_model(encoder_out)
-
+'''
 
 
 
@@ -139,6 +139,19 @@ class TCAEEncoder2D(nn.Module):
 
         self.before_pool_dims = []
 
+        if num_levels==3:
+            out_channels_encoder = [1,8,24,4]
+            out_channels_decoder = [4,24,8,1]
+        elif num_levels==4:
+            out_channels_encoder = [1,8,32,16,4]
+            out_channels_decoder = [4,16,32,8,1]
+        elif num_levels==5:
+            out_channels_encoder = [1,8,32,64,16,4]
+            out_channels_decoder = [4,16,64,32,8,1]
+        elif num_levels==6:
+            out_channels_encoder = [1,16,32,64,24,4]
+            out_channels_decoder = [4,24,64,32,16,1]
+
         dilation = 2
         layers = []
         cur_H = window_size
@@ -146,16 +159,19 @@ class TCAEEncoder2D(nn.Module):
         for i in range(1, self.num_levels+1):
 
             cur_dilation = (dilation**(i-1), 1)
-            #print(cur_dilation)
-            constant_padding = (0,0,dilation**i,0)
+            constant_padding = (0,0,dilation**i*(self.kernel_size-2),0)
 
             pad = nn.ConstantPad2d(padding = constant_padding, value=0.0)
-            conv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(self.kernel_size, self.kernel_size), dilation=cur_dilation)
+            conv = nn.Conv2d(in_channels=out_channels_encoder[i-1], out_channels=out_channels_encoder[i], kernel_size=(self.kernel_size, self.kernel_size), dilation=cur_dilation)
+            batchnorm = nn.BatchNorm2d(num_features=out_channels_encoder[i])
             relu = nn.ReLU()
+            dropout = nn.Dropout(p=.2)
             maxpool = nn.MaxPool2d(kernel_size=(2,2), ceil_mode=True)
             layers.append(pad)
             layers.append(conv)
+            layers.append(batchnorm)
             layers.append(relu)
+            layers.append(dropout)
             if i <= num_levels - 2: # and i % 2 == 0:
                 layers.append(maxpool)
 
@@ -208,8 +224,23 @@ class TCAEDecoder2D(nn.Module):
         super(TCAEDecoder2D, self).__init__()
 
         #pad
+        self.before_pool_dims = before_pool_dims
         self.kernel_size=kernel_size
         self.num_levels=num_levels
+
+        if num_levels==3:
+            out_channels_encoder = [1,8,24,4]
+            out_channels_decoder = [4,24,8,1]
+        elif num_levels==4:
+            out_channels_encoder = [1,8,32,16,4]
+            out_channels_decoder = [4,16,32,8,1]
+        elif num_levels==5:
+            out_channels_encoder = [1,8,32,64,16,4]
+            out_channels_decoder = [4,16,64,32,8,1]
+        elif num_levels==6:
+            out_channels_encoder = [1,16,32,64,24,4]
+            out_channels_decoder = [4,24,64,32,16,1]
+
 
         dilation = 2
         layers = []
@@ -220,17 +251,31 @@ class TCAEDecoder2D(nn.Module):
             #conv = nn.ConvTranspose2d(in_channels=1, out_channels=1, kernel_size=(self.kernel_size,self.kernel_size), padding=dilation**(num_levels-i), dilation=dilation**(num_levels-i))
             #this or that^^
             #this below i think preserves causality moreso?
-            pad = nn.ConstantPad2d(padding = (0, 0, dilation**(num_levels-i)*2, 0), value=0.0)
-            conv = nn.ConvTranspose2d(in_channels=1, out_channels=1, kernel_size=(self.kernel_size,self.kernel_size), padding=(dilation**(num_levels-i)*2, 0), dilation=(dilation**(num_levels-i), 1))
+            constant_padding = (0,0,dilation**(num_levels-i)*(self.kernel_size-1),0)
+            cur_dilation = (dilation**(num_levels-i), 1)
+            conv_padding = (constant_padding[2], 0)
+
+            pad = nn.ConstantPad2d(padding = constant_padding, value=0.0)
+            if i == 1:
+                conv = nn.ConvTranspose2d(in_channels=out_channels_decoder[num_levels-i], out_channels=out_channels_decoder[num_levels-i+1], kernel_size=(self.kernel_size,self.kernel_size), padding=(conv_padding[0]+int((self.kernel_size-3)/2),0), dilation=cur_dilation)
+            else:
+                conv = nn.ConvTranspose2d(in_channels=out_channels_decoder[num_levels-i], out_channels=out_channels_decoder[num_levels-i+1], kernel_size=(self.kernel_size,self.kernel_size), padding=conv_padding, dilation=cur_dilation)
+            
+            batchnorm = nn.BatchNorm2d(num_features=out_channels_decoder[num_levels-i+1])
             relu = nn.ReLU()
-            if i <= len(before_pool_dims) >= 1:
-                upsample = nn.Upsample(size=(before_pool_dims[-1]), mode='nearest')
-                before_pool_dims.pop(-1)
+            dropout = nn.Dropout(p=.2)
+
+            if i <= len(self.before_pool_dims) >= 1:
+                upsample = nn.Upsample(size=(self.before_pool_dims[-1]), mode='nearest')
+                self.before_pool_dims.pop(-1)
                 layers.append(upsample)
+            
             layers.append(pad)
             layers.append(conv)
+            layers.append(batchnorm)
             if i >= 2:
                 layers.append(relu)
+                layers.append(dropout)
             else:
                 layers.append(nn.Sigmoid())
         
@@ -267,7 +312,7 @@ print('-------------------------------------2D----------------------------------
 
 window_size=100
 num_feats=55
-kernel_size=3
+kernel_size=5
 num_levels=4
 x_2d = torch.ones((256, 1, window_size, num_feats))
 
@@ -282,9 +327,9 @@ class TCAE(nn.Module):
     def __init__(self, num_levels=3, window_size=window_size, num_feats=num_feats, kernel_size=3):
         super(TCAE, self).__init__()
 
-        self.encoder = TCAEEncoder2D(num_levels=num_levels, window_size=window_size, num_feats=num_feats, kernel_size=3)
+        self.encoder = TCAEEncoder2D(num_levels=num_levels, window_size=window_size, num_feats=num_feats, kernel_size=kernel_size)
         before_pool_dims = self.encoder.before_pool_dims
-        self.decoder = TCAEDecoder2D(before_pool_dims, num_levels=num_levels)
+        self.decoder = TCAEDecoder2D(before_pool_dims, window_size=window_size, num_feats=num_feats, num_levels=num_levels, kernel_size=kernel_size)
 
 
     def forward(self, x):
@@ -293,7 +338,8 @@ class TCAE(nn.Module):
         return dec_out
 
 
-ae = TCAE(num_levels=num_levels, window_size=window_size, num_feats=num_feats, kernel_size=3)
+#only odd kernel sizes
+ae = TCAE(num_levels=num_levels, window_size=window_size, num_feats=num_feats, kernel_size=kernel_size)
 ae(x_2d)
 
 #CVAE archs will need to be adjusted...
