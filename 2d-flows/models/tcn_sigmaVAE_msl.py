@@ -42,30 +42,46 @@ class CNN_sigmaVAE(nn.Module):
         self.num_levels = num_levels
         self.before_pool_dims = []
 
-        #out_channels_encoder = [1,8,32,16,4]
         
-        out_channels_encoder = [1,8,32,16,4]
-        out_channels_decoder = [4,16,32,8,1]
+        if num_levels==3:
+            out_channels_encoder = [1,8,24,4]
+            out_channels_decoder = [4,24,8,1]
+        elif num_levels==4:
+            out_channels_encoder = [1,8,32,16,4]
+            out_channels_decoder = [4,16,32,8,1]
+        elif num_levels==5:
+            out_channels_encoder = [1,8,32,64,16,4]
+            out_channels_decoder = [4,16,64,32,8,1]
+        elif num_levels==6:
+            out_channels_encoder = [1,16,32,64,24,4]
+            out_channels_decoder = [4,24,64,32,16,1]
 
         dilation = 2
         layers = []
         cur_H = window_size
         cur_W = num_feats
+        
+        #ENCODER
         for i in range(1, self.num_levels+1):
 
             cur_dilation = (dilation**(i-1), 1)
             #print(cur_dilation)
-            constant_padding = (0,0,dilation**i,0)
+            constant_padding = (0,0,dilation**i*(self.kernel_size-2),0)
 
             pad = nn.ConstantPad2d(padding = constant_padding, value=0.0)
             conv = nn.Conv2d(in_channels=out_channels_encoder[i-1], out_channels=out_channels_encoder[i], kernel_size=(self.kernel_size, self.kernel_size), dilation=cur_dilation)
+            batchnorm = nn.BatchNorm2d(num_features=out_channels_encoder[i])
             relu = nn.ReLU()
+            dropout = nn.Dropout(p=.2)
             maxpool = nn.MaxPool2d(kernel_size=(2,2), ceil_mode=True)
             layers.append(pad)
             layers.append(conv)
+            layers.append(batchnorm)
             layers.append(relu)
+            layers.append(dropout)
             if i <= num_levels - 2: # and i % 2 == 0:
                 layers.append(maxpool)
+
 
             cur_H += constant_padding[2]
             cur_W += 0
@@ -77,28 +93,48 @@ class CNN_sigmaVAE(nn.Module):
                 cur_W = np.ceil(cur_W / 2)
 
         
+        cur_H = int(cur_H)
+        cur_W=int(cur_W)
         self.encoder_net = nn.Sequential(*layers)
 
-        lin_layer= 25*9
-        self.fc41 = nn.Linear(out_channels_encoder[-1]*lin_layer, self.latent_dim)
-        self.fc42 = nn.Linear(out_channels_encoder[-1]*lin_layer, self.latent_dim)
+        lin_layer= cur_H*cur_W
+        print(cur_H, cur_W)
+        self.fc41 = nn.Linear(int(out_channels_encoder[-1]*lin_layer), self.latent_dim)
+        self.fc42 = nn.Linear(int(out_channels_encoder[-1]*lin_layer), self.latent_dim)
 
         self.defc1 = nn.Linear(self.latent_dim, out_channels_decoder[0]*lin_layer)
         
+
+        #DECODER
         layers = []
         for i in range(self.num_levels, 0, -1):
             upsample = nn.Upsample(scale_factor=2)
-            pad = nn.ConstantPad2d(padding = (0, 0, dilation**(num_levels-i)*2, 0), value=0.0)
-            conv = nn.ConvTranspose2d(in_channels=out_channels_decoder[num_levels - i], out_channels=out_channels_decoder[num_levels - i + 1], kernel_size=(self.kernel_size,self.kernel_size), padding=(dilation**(num_levels-i)*2, 0), dilation=(dilation**(num_levels-i), 1))
+
+            constant_padding = (0,0,dilation**(num_levels-i)*(self.kernel_size-1),0)
+            cur_dilation = (dilation**(num_levels-i), 1)
+            conv_padding = (constant_padding[2], 0)
+
+            pad = nn.ConstantPad2d(padding = constant_padding, value=0.0)
+            if i == 1:
+                conv = nn.ConvTranspose2d(in_channels=out_channels_decoder[num_levels-i], out_channels=out_channels_decoder[num_levels-i+1], kernel_size=(self.kernel_size,self.kernel_size), padding=(conv_padding[0]+int((self.kernel_size-3)/2),0), dilation=cur_dilation)
+            else:
+                conv = nn.ConvTranspose2d(in_channels=out_channels_decoder[num_levels-i], out_channels=out_channels_decoder[num_levels-i+1], kernel_size=(self.kernel_size,self.kernel_size), padding=conv_padding, dilation=cur_dilation)
+            
+            batchnorm = nn.BatchNorm2d(num_features=out_channels_decoder[num_levels-i+1])
             relu = nn.ReLU()
+            dropout = nn.Dropout(p=.2)
+
             if i <= len(self.before_pool_dims) >= 1:
                 upsample = nn.Upsample(size=(self.before_pool_dims[-1]), mode='nearest')
                 self.before_pool_dims.pop(-1)
                 layers.append(upsample)
+            
             layers.append(pad)
             layers.append(conv)
+            layers.append(batchnorm)
             if i >= 2:
                 layers.append(relu)
+                layers.append(dropout)
             else:
                 layers.append(nn.Sigmoid())
         
