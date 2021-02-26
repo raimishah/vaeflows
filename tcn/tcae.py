@@ -139,18 +139,10 @@ class TCAEEncoder2D(nn.Module):
 
         self.before_pool_dims = []
 
-        if num_levels==3:
-            out_channels_encoder = [1,8,24,4]
-            out_channels_decoder = [4,24,8,1]
-        elif num_levels==4:
-            out_channels_encoder = [1,8,32,16,4]
-            out_channels_decoder = [4,16,32,8,1]
-        elif num_levels==5:
-            out_channels_encoder = [1,8,32,64,16,4]
-            out_channels_decoder = [4,16,64,32,8,1]
-        elif num_levels==6:
-            out_channels_encoder = [1,16,32,64,24,4]
-            out_channels_decoder = [4,24,64,32,16,1]
+
+        channels = [2**i for i in range(0,num_levels*3+1)]
+        print(channels)
+        channel_idx = 1
 
         dilation = 2
         layers = []
@@ -160,20 +152,20 @@ class TCAEEncoder2D(nn.Module):
 
             cur_dilation = (dilation**(i-1), 1)
             constant_padding = (0,0,dilation**i*(self.kernel_size-2),0)
+            conv_padding = (0,0)
 
             pad = nn.ConstantPad2d(padding = constant_padding, value=0.0)
-            conv = nn.Conv2d(in_channels=out_channels_encoder[i-1], out_channels=out_channels_encoder[i], kernel_size=(self.kernel_size, self.kernel_size), dilation=cur_dilation)
-            batchnorm = nn.BatchNorm2d(num_features=out_channels_encoder[i])
+            conv = nn.Conv2d(in_channels=channels[channel_idx-1], out_channels=channels[channel_idx], kernel_size=(self.kernel_size, self.kernel_size), padding=conv_padding, dilation=cur_dilation)
+            batchnorm = nn.BatchNorm2d(num_features=channels[channel_idx])
             relu = nn.ReLU()
             dropout = nn.Dropout(p=.2)
-            maxpool = nn.MaxPool2d(kernel_size=(2,2), ceil_mode=True)
+            
             layers.append(pad)
             layers.append(conv)
             layers.append(batchnorm)
             layers.append(relu)
             layers.append(dropout)
-            if i <= num_levels - 2: # and i % 2 == 0:
-                layers.append(maxpool)
+            channel_idx += 1
 
             cur_H += constant_padding[2]
             cur_W += 0
@@ -181,7 +173,65 @@ class TCAEEncoder2D(nn.Module):
             cur_H = np.floor((cur_H + 2*0 - cur_dilation[0] * (self.kernel_size-1) - 1)/ 1 + 1 )
             cur_W = np.floor((cur_W - 2*0 - cur_dilation[1] * (self.kernel_size-1) - 1)/1 + 1)
             print(cur_H, cur_W)
-            if i <= num_levels - 2:
+
+
+
+            #----------------------- THIRD
+
+
+            pad = nn.ConstantPad2d(padding = constant_padding, value=0.0)
+            conv = nn.Conv2d(in_channels=channels[channel_idx-1], out_channels=channels[channel_idx], kernel_size=(self.kernel_size, self.kernel_size), padding=conv_padding, dilation=cur_dilation)
+            batchnorm = nn.BatchNorm2d(num_features=channels[channel_idx])
+            relu = nn.ReLU()
+            dropout = nn.Dropout(p=.2)
+            
+            layers.append(pad)
+            layers.append(conv)
+            layers.append(batchnorm)
+            layers.append(relu)
+            layers.append(dropout)
+            channel_idx += 1
+
+            cur_H += constant_padding[2]
+            cur_W += 0
+            print(cur_H, cur_W)
+            cur_H = np.floor((cur_H + 2*0 - cur_dilation[0] * (self.kernel_size-1) - 1)/ 1 + 1 )
+            cur_W = np.floor((cur_W - 2*0 - cur_dilation[1] * (self.kernel_size-1) - 1)/1 + 1)
+            print(cur_H, cur_W)
+
+
+
+            #------------------------ END THIRD
+
+
+
+
+
+
+            #same padding for next conv
+            conv = nn.Conv2d(in_channels=channels[channel_idx-1], out_channels=channels[channel_idx], kernel_size=(self.kernel_size, self.kernel_size), padding=conv_padding, dilation=cur_dilation)
+            batchnorm = nn.BatchNorm2d(num_features=channels[channel_idx])
+            maxpool = nn.MaxPool2d(kernel_size=(2,2), ceil_mode=True)
+            
+
+            layers.append(pad)
+            layers.append(conv)
+            layers.append(batchnorm)
+            layers.append(relu)
+            layers.append(dropout)
+            if i <= num_levels - 1: # and i % 2 == 0:
+                layers.append(maxpool)
+            channel_idx += 1
+
+
+
+            cur_H += constant_padding[2]
+            cur_W += 0
+            print(cur_H, cur_W)
+            cur_H = np.floor((cur_H + 2*0 - cur_dilation[0] * (self.kernel_size-1) - 1)/ 1 + 1 )
+            cur_W = np.floor((cur_W - 2*0 - cur_dilation[1] * (self.kernel_size-1) - 1)/1 + 1)
+            print(cur_H, cur_W)
+            if i <= num_levels - 1:
                 self.before_pool_dims.append((int(cur_H), int(cur_W)))
                 cur_H = np.ceil(cur_H / 2)
                 cur_W = np.ceil(cur_W / 2)
@@ -207,7 +257,7 @@ class TCAEEncoder2D(nn.Module):
             if isinstance(layer, nn.ConstantPad2d):
                 print('after pad{} {}'.format(pad_count, x.shape))
                 pad_count+=1
-            if isinstance(layer, nn.ReLU) or isinstance(layer, nn.Conv2d):
+            if isinstance(layer, nn.Conv2d):
                 print('after conv{} {}'.format(conv_count,x.shape))
                 conv_count+=1
             if isinstance(layer, nn.MaxPool2d):
@@ -228,19 +278,9 @@ class TCAEDecoder2D(nn.Module):
         self.kernel_size=kernel_size
         self.num_levels=num_levels
 
-        if num_levels==3:
-            out_channels_encoder = [1,8,24,4]
-            out_channels_decoder = [4,24,8,1]
-        elif num_levels==4:
-            out_channels_encoder = [1,8,32,16,4]
-            out_channels_decoder = [4,16,32,8,1]
-        elif num_levels==5:
-            out_channels_encoder = [1,8,32,64,16,4]
-            out_channels_decoder = [4,16,64,32,8,1]
-        elif num_levels==6:
-            out_channels_encoder = [1,16,32,64,24,4]
-            out_channels_decoder = [4,24,64,32,16,1]
-
+        channels = [2**i for i in range(0,num_levels*3+1)]
+        print(channels)
+        channel_idx = len(channels)-1
 
         dilation = 2
         layers = []
@@ -257,19 +297,59 @@ class TCAEDecoder2D(nn.Module):
 
             pad = nn.ConstantPad2d(padding = constant_padding, value=0.0)
             if i == 1:
-                conv = nn.ConvTranspose2d(in_channels=out_channels_decoder[num_levels-i], out_channels=out_channels_decoder[num_levels-i+1], kernel_size=(self.kernel_size,self.kernel_size), padding=(conv_padding[0]+int((self.kernel_size-3)/2),0), dilation=cur_dilation)
+                conv = nn.ConvTranspose2d(in_channels=channels[channel_idx], out_channels=channels[channel_idx-1], kernel_size=(self.kernel_size,self.kernel_size), padding=(conv_padding[0]+int((self.kernel_size-3)/2),conv_padding[1]), dilation=cur_dilation)
             else:
-                conv = nn.ConvTranspose2d(in_channels=out_channels_decoder[num_levels-i], out_channels=out_channels_decoder[num_levels-i+1], kernel_size=(self.kernel_size,self.kernel_size), padding=conv_padding, dilation=cur_dilation)
+                conv = nn.ConvTranspose2d(in_channels=channels[channel_idx], out_channels=channels[channel_idx-1], kernel_size=(self.kernel_size,self.kernel_size), padding=conv_padding, dilation=cur_dilation)
             
-            batchnorm = nn.BatchNorm2d(num_features=out_channels_decoder[num_levels-i+1])
+            batchnorm = nn.BatchNorm2d(num_features=channels[channel_idx-1])
             relu = nn.ReLU()
             dropout = nn.Dropout(p=.2)
 
-            if i <= len(self.before_pool_dims) >= 1:
+
+            if i <= num_levels - 1 and len(self.before_pool_dims) >= 1:
+                print(before_pool_dims[-1])
                 upsample = nn.Upsample(size=(self.before_pool_dims[-1]), mode='nearest')
                 self.before_pool_dims.pop(-1)
                 layers.append(upsample)
+
+            layers.append(pad)
+            layers.append(conv)
+            layers.append(batchnorm)
+            layers.append(relu)
+            layers.append(dropout)
+            channel_idx -= 1
+
+
+            #----------------------------- THIRD
+
+            pad = nn.ConstantPad2d(padding = constant_padding, value=0.0)
+            if i == 1:
+                conv = nn.ConvTranspose2d(in_channels=channels[channel_idx], out_channels=channels[channel_idx-1], kernel_size=(self.kernel_size,self.kernel_size), padding=(conv_padding[0]+int((self.kernel_size-3)/2),conv_padding[1]), dilation=cur_dilation)
+            else:
+                conv = nn.ConvTranspose2d(in_channels=channels[channel_idx], out_channels=channels[channel_idx-1], kernel_size=(self.kernel_size,self.kernel_size), padding=conv_padding, dilation=cur_dilation)
             
+            batchnorm = nn.BatchNorm2d(num_features=channels[channel_idx-1])
+            relu = nn.ReLU()
+            dropout = nn.Dropout(p=.2)
+
+            layers.append(pad)
+            layers.append(conv)
+            layers.append(batchnorm)
+            layers.append(relu)
+            layers.append(dropout)
+            channel_idx -= 1
+
+            #----------------------------- END THIRD
+
+
+
+
+            if i == 1:
+                conv = nn.ConvTranspose2d(in_channels=channels[channel_idx], out_channels=channels[channel_idx-1], kernel_size=(self.kernel_size,self.kernel_size), padding=(conv_padding[0]+int((self.kernel_size-3)/2),conv_padding[1]), dilation=cur_dilation)
+            else:
+                conv = nn.ConvTranspose2d(in_channels=channels[channel_idx], out_channels=channels[channel_idx-1], kernel_size=(self.kernel_size,self.kernel_size), padding=conv_padding, dilation=cur_dilation)
+            batchnorm = nn.BatchNorm2d(num_features=channels[channel_idx-1])
+
             layers.append(pad)
             layers.append(conv)
             layers.append(batchnorm)
@@ -278,6 +358,9 @@ class TCAEDecoder2D(nn.Module):
                 layers.append(dropout)
             else:
                 layers.append(nn.Sigmoid())
+            channel_idx -= 1
+
+
         
         self.net = nn.Sequential(*layers)
 
@@ -297,7 +380,7 @@ class TCAEDecoder2D(nn.Module):
             if isinstance(layer, nn.ConstantPad2d):
                 print('after pad{} {}'.format(pad_count, x.shape))
                 pad_count+=1
-            if isinstance(layer, nn.ConvTranspose2d) or isinstance(layer, nn.ReLU):
+            if isinstance(layer, nn.ConvTranspose2d):
                 print('after upconv{} {}'.format(conv_count,x.shape))
                 conv_count+=1
             if isinstance(layer, nn.Upsample):
@@ -311,9 +394,9 @@ print('-------------------------------------2D----------------------------------
 
 
 window_size=100
-num_feats=55
-kernel_size=5
-num_levels=4
+num_feats=38
+kernel_size=3
+num_levels=2
 x_2d = torch.ones((256, 1, window_size, num_feats))
 
 #enc_model = TCAEEncoder2D(num_levels=num_levels, window_size=window_size, num_feats=num_feats, kernel_size=3)
