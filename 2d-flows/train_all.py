@@ -124,23 +124,22 @@ def main():
     '''
 
     model_type='tcn_vae' #'vae', 'cvae', 'tcn_vae'
-    flow_type=None
+    window_size=32
+    batch_size=256
+    jump_size=3
+    flow_type='BNAF'
     prob_decoder=False
+    latent_dim=8
+    num_feats = 38
+    num_epochs=2000
+    lr = .01 if flow_type==None else .01
+    early_stop_patience=600 if flow_type==None else 800
+
+    kernel_size=5
+    num_levels=2
 
     print('Training with {}, with flow - {}, and prob decoder - {}'.format(model_type, flow_type, prob_decoder))
     print(model_type, flow_type, prob_decoder)
-
-    batch_size=256
-    latent_dim=10
-    num_feats=38
-    window_size=100
-    jump_size=32
-    num_epochs=2000
-    lr = .005 if flow_type==None else .005
-    early_stop_patience=300 if flow_type==None else 500
-
-    kernel_size=3
-    num_levels=3
 
     if model_type=='vae':
         cond_window_size=-1
@@ -159,7 +158,7 @@ def main():
 
     print(model)
 
-    train_model_on_all_datasets(model_type, model, num_epochs, lr, window_size, cond_window_size, jump_size, batch_size, early_stop_patience=early_stop_patience, start_from='1-6', use_validation=True)
+    train_model_on_all_datasets(model_type, model, num_epochs, lr, window_size, cond_window_size, jump_size, batch_size, early_stop_patience=early_stop_patience, start_from='1-1', use_validation=True)
 
 if __name__=='__main__':
 	main()
