@@ -20,12 +20,14 @@ from torchvision import transforms
 
 
 from trainer import Trainer
+from tcn_trainer import TCN_Trainer
 
 import utils
 
 from utils import softclip
 from models.cnn_sigmaVAE_msl import CNN_sigmaVAE
-from models.cnn_sigmacVAE import CNN_sigmacVAE
+from models.cnn_sigmacVAE_msl import CNN_sigmacVAE
+from models.tcn_vae import TCN_VAE 
 
 
 import evaluation_utils
@@ -36,7 +38,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def get_scores_and_labels(model_type, model, df_Y_test, dataloader, X_test_tensor):
     
-    preds, scores, mse = evaluation_utils.evaluate_model_new(model, model_type, dataloader, X_test_tensor)
+    if model_type=='tcn_vae':
+        preds, scores, mse = evaluation_utils.evaluate_model_tcn(model, model_type, dataloader, X_test_tensor)
+    else:
+        preds, scores, mse = evaluation_utils.evaluate_model_new(model, model_type, dataloader, X_test_tensor)
     
     labels = df_Y_test.values
     labels = np.reshape(labels, (labels.shape[0], ))
@@ -67,7 +72,11 @@ def train_and_eval_on_MSL(model_type, model, num_epochs, learning_rate, window_s
 
     print(X_train_tensor.shape)
 
-    trainer = Trainer(data_name = 'msl', model_type = model_type, flow_type=model.flow_type, early_stop_patience=early_stop_patience)
+    if model_type=='tcn_vae':
+        trainer = TCN_Trainer(data_name = 'msl', model_type = model_type, flow_type=model.flow_type, early_stop_patience=early_stop_patience)
+    elif model_type=='vae' or model_type=='cvae':
+        trainer = Trainer(data_name = 'msl', model_type = model_type, flow_type=model.flow_type, early_stop_patience=early_stop_patience)
+        
     model, flag = trainer.train_model(model, num_epochs=num_epochs, learning_rate=learning_rate, trainloader=trainloader, valloader=valloader)
 
     if model.prob_decoder:
@@ -91,13 +100,14 @@ def train_and_eval_on_MSL(model_type, model, num_epochs, learning_rate, window_s
     #utils.plot_reconstruction(model, model_type='vae',dataloader=testloader)
 
 
-    #evaluation
+    #EVALUATION
+    #if model_type=='vae':
+    #    scores, labels, mse = get_scores_and_labels(model_type, model, df_Y_test, testloader, X_test_tensor)
 
-    if model_type=='vae':
-        scores, labels, mse = get_scores_and_labels(model_type, model, df_Y_test, testloader, X_test_tensor)
+    #if model_type=='cvae':
+    #    scores, labels, mse = get_scores_and_labels(model_type, model, df_Y_test, testloader, X_test_tensor)
 
-    if model_type=='cvae':
-        scores, labels, mse = get_scores_and_labels(model_type, model, df_Y_test, testloader, X_test_tensor)
+    scores, labels, mse = get_scores_and_labels(model_type, model, df_Y_test, testloader, X_test_tensor)
 
 
     confusion_matrix_metrics, alert_delays = evaluation_utils.compute_AUPR(labels, scores, threshold_jump=500)
@@ -122,6 +132,20 @@ def train_and_eval_on_MSL(model_type, model, num_epochs, learning_rate, window_s
     F1 = tp / (tp+.5*(fp+fn))
     print('Overall F1 best : {}'.format(F1)) 
 
+    print('\n\n EVT AD:')
+    confusion_matrix_metrics, alert_delays = evaluation_utils.compute_metrics_with_pareto(labels, scores)
+    tn_fp_fn_tp=np.empty((0,4)) 
+    tn_fp_fn_tp = np.concatenate([tn_fp_fn_tp, confusion_matrix_metrics])
+    
+    tn = tn_fp_fn_tp[:, 0].sum()
+    fp = tn_fp_fn_tp[:, 1].sum()
+    fn = tn_fp_fn_tp[:, 2].sum()
+    tp = tn_fp_fn_tp[:, 3].sum()
+    
+    F1 = tp / (tp+.5*(fp+fn))
+    print('EVT AD best : {}'.format(F1)) 
+
+
 
 def main():
 
@@ -137,33 +161,40 @@ def main():
 
     '''
 
-    model_type='vae'
+    model_type='vae' #'vae', 'cvae', 'tcn_vae'
     flow_type=None
     prob_decoder=False
 
     print('Training with {}, with flow - {}, and prob decoder - {}'.format(model_type, flow_type, prob_decoder))
 
     batch_size=256
-    jump_size=100
+    jump_size=25
     latent_dim=10
     num_feats=55
-    window_size=100
+    window_size=64 if model_type=='tcn_vae' else 100
     num_epochs=10
-    lr = .005 if flow_type==None else .0005
-    early_stop_patience=100 if flow_type==None else 100
+    lr = .005 if flow_type==None else .005
+    early_stop_patience=300 if flow_type==None else 500
+
+    kernel_size=5
+    num_levels=2
 
     if model_type=='vae':
         cond_window_size=-1
         model = CNN_sigmaVAE(latent_dim=latent_dim, window_size=window_size, jump_size=jump_size, num_feats=num_feats, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
-        model.cuda() if torch.cuda.is_available() else model.cpu()
-        print(model)
 
 
     elif model_type=='cvae':	
         cond_window_size=13
         model = CNN_sigmacVAE(latent_dim=latent_dim, window_size=window_size, cond_window_size=cond_window_size, jump_size=jump_size, num_feats=num_feats, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
-        print(model)
             
+    elif model_type=='tcn_vae':
+        cond_window_size=-1
+        model = TCN_VAE(latent_dim=latent_dim, window_size=window_size, jump_size=jump_size, num_feats=num_feats, kernel_size=kernel_size, num_levels=num_levels, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
+
+    print(model)
+
+
     train_and_eval_on_MSL(model_type, model, num_epochs, lr, window_size, cond_window_size, batch_size, early_stop_patience=early_stop_patience, use_validation=True)
 
 if __name__=='__main__':

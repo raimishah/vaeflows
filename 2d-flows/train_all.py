@@ -20,14 +20,14 @@ from torchvision import transforms
 
 
 from trainer import Trainer
+from tcn_trainer import TCN_Trainer
 
 import utils
 
 from utils import softclip
 from models.cnn_sigmaVAE import CNN_sigmaVAE
 from models.cnn_sigmacVAE import CNN_sigmacVAE
-from models.cnn_sigmaVAE_flow import CNN_sigmaVAE_flow
-from models.cnn_sigmacVAE_flow import CNN_sigmacVAE_flow
+from models.tcn_vae import TCN_VAE 
 
 
 import evaluation_utils
@@ -72,11 +72,16 @@ def train_model_on_all_datasets(model_type, model, num_epochs, learning_rate, wi
                 else:
                     X_train_data, X_test_data, X_train_tensor, cond_train_tensor, X_test_tensor, cond_test_tensor, df_Y_test, trainloader, valloader, testloader = utils.read_machine_data_cvae_with_validation('../../datasets/ServerMachineDataset/machine-' +machine_name, window_size, cond_window_size, jump_size, batch_size, val_size=.3)
 
-            trainer = Trainer(data_name = machine_name, model_type = model_type, flow_type=model.flow_type, early_stop_patience=early_stop_patience)
+
+            if model_type=='tcn_vae':
+                trainer = TCN_Trainer(data_name = machine_name, model_type = model_type, flow_type=model.flow_type, early_stop_patience=early_stop_patience)
+            elif model_type=='vae' or model_type=='cvae':
+                trainer = Trainer(data_name = machine_name, model_type = model_type, flow_type=model.flow_type, early_stop_patience=early_stop_patience)
+
             model, flag = trainer.train_model(model, num_epochs=num_epochs, learning_rate=learning_rate, trainloader=trainloader, valloader=valloader)
 
             if flag:
-                if failed_count>5:
+                if failed_count>3:
                     return
                 #return
                 #failed
@@ -118,7 +123,7 @@ def main():
 
     '''
 
-    model_type='vae'
+    model_type='tcn_vae' #'vae', 'cvae', 'tcn_vae'
     flow_type=None
     prob_decoder=False
 
@@ -132,20 +137,28 @@ def main():
     jump_size=32
     num_epochs=2000
     lr = .005 if flow_type==None else .005
-    early_stop_patience=500 if flow_type==None else 500
+    early_stop_patience=300 if flow_type==None else 500
+
+    kernel_size=3
+    num_levels=3
 
     if model_type=='vae':
         cond_window_size=-1
         model = CNN_sigmaVAE(latent_dim=latent_dim, window_size=window_size, jump_size=jump_size, num_feats=num_feats, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
         model.cuda() if torch.cuda.is_available() else model.cpu()
-        print(model)
-
+    
 
     elif model_type=='cvae':	
         cond_window_size=49
         model = CNN_sigmacVAE(latent_dim=latent_dim, window_size=window_size, cond_window_size=cond_window_size, jump_size=jump_size, num_feats=num_feats, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
-        print(model)
-            
+    
+
+    elif model_type=='tcn_vae':
+        cond_window_size=-1
+        model = TCN_VAE(latent_dim=latent_dim, window_size=window_size, jump_size=jump_size, num_feats=num_feats, kernel_size=kernel_size, num_levels=num_levels, flow_type=flow_type, use_probabilistic_decoder=prob_decoder).to(device)
+
+    print(model)
+
     train_model_on_all_datasets(model_type, model, num_epochs, lr, window_size, cond_window_size, jump_size, batch_size, early_stop_patience=early_stop_patience, start_from='1-6', use_validation=True)
 
 if __name__=='__main__':

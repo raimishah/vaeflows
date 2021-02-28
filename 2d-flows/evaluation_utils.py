@@ -200,9 +200,9 @@ def compute_AUPR(labels, scores, threshold_jump=5):
 
     
     
-def compute_metrics_with_pareto(labels, scores):
+def compute_metrics_with_pareto(labels, scores, initial_quantile_thresh):
 
-    initial_threshold = np.quantile(scores, .01)
+    initial_threshold = np.quantile(scores, initial_quantile_thresh)
     #print('initial thresh: ' + str(initial_threshold))
 
     tails = scores[scores < initial_threshold]
@@ -339,6 +339,87 @@ def evaluate_model_new(model, model_type, dataloader, X_tensor):
 
 
     return preds, scores, mse
+
+
+def evaluate_model_tcn(model, model_type, dataloader, X_tensor):
+    model.eval()
+
+    dataiter = iter(dataloader)
+    x, y = dataiter.next()
+
+    preds = np.empty((0,x.shape[1],x.shape[2],x.shape[3]))
+    rec_mus = np.empty_like(preds)
+    rec_sigmas = np.empty_like(preds)
+    
+    reals = np.empty((0,x.shape[1],x.shape[2],x.shape[3]))
+
+    window_size = x.shape[2]
+    cond_window_size = y.shape[2]
+    jump_size = model.jump_size
+
+    for j, data in enumerate(dataloader, 0):
+
+        x, y = data
+        x = x.cuda() if torch.cuda.is_available() else x.cpu()
+        x.to(device)
+        y = y.cuda() if torch.cuda.is_available() else y.cpu()
+        y.to(device)
+        if model_type=='cvae':
+            outputs, rec_mu, rec_sigma, kl = model(x, y)
+        else:
+            outputs, rec_mu, rec_sigma, kl = model(x)
+        
+        preds = np.concatenate([preds, outputs.cpu().detach().numpy()])
+        if model.prob_decoder:
+            rec_mus = np.concatenate([rec_mus, rec_mu.cpu().detach().numpy()])
+            rec_sigmas = np.concatenate([rec_sigmas, rec_sigma.cpu().detach().numpy()])
+        
+        reals = np.concatenate([reals, x.cpu().detach().numpy()])
+    
+
+    temp_preds=np.zeros((preds.shape[0]*jump_size, preds.shape[3]))
+    temp_reals=np.zeros((preds.shape[0]*jump_size, preds.shape[3]))
+    time_idx=0
+    for i in range(len(preds)):
+        temp_preds[time_idx:time_idx+jump_size, :] = preds[i, 0, -jump_size: , :]
+        temp_reals[time_idx:time_idx+jump_size, :] = reals[i, 0, -jump_size: , :]
+        time_idx += jump_size
+
+    preds = temp_preds
+    reals = temp_reals
+
+    #get scores
+    if model.prob_decoder:
+        probs = []
+        mu_to_plot = []#np.zeros_like(reals)
+        sigma_to_plot = []#np.zeros_like(reals)
+        for i in range(rec_mus.shape[0]):
+            #for j in range(cond_window_size):
+            for j in range(jump_size):
+
+                mu_to_plot.append(rec_mus[i,0,j])
+                sigma_to_plot.append(rec_sigmas[i,0,j])
+
+                #probability of observed data point according to model
+                prob = multivariate_normal.logpdf(X_tensor[i, 0, j], rec_mus[i,0,j], np.exp(rec_sigmas[i,0,j]))
+                probs.append(prob)
+
+        scores = np.array(probs)
+    else:
+        scores = - (np.square(preds - reals)).mean(axis=1)
+
+    mse = mean_squared_error(reals, preds)
+    print('MSE : ' + str(np.round(mse,10)))
+
+
+    return preds, scores, mse
+
+
+
+
+
+
+
 
 
 def evaluate_cvae_generation(model, dataloader, X_tensor):
