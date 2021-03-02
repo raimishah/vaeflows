@@ -29,10 +29,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class TCN_VAE(nn.Module):
 
-    def __init__(self,latent_dim=10, window_size=32, jump_size=32, num_feats=38, kernel_size=3, num_levels=4, flow_type=None, use_probabilistic_decoder=False):
+    def __init__(self,conditional=False, latent_dim=10, window_size=32, cond_window_size=32, jump_size=32, num_feats=38, kernel_size=5, num_levels=2, convs_per_level = 2, flow_type=None, use_probabilistic_decoder=False):
         super(TCN_VAE, self).__init__()
     
+        self.conditional = conditional
         self.window_size = window_size
+        self.cond_window_size = cond_window_size
         self.jump_size = jump_size
         self.latent_dim = latent_dim
         self.prob_decoder = use_probabilistic_decoder
@@ -40,10 +42,13 @@ class TCN_VAE(nn.Module):
         self.flow_type = flow_type
         self.kernel_size = kernel_size
         self.num_levels = num_levels
+        self.convs_per_level = convs_per_level
         self.before_pool_dims = []
+        self.last_encoder_conv_dims = (-1,-1)
 
-        
-        channels = [2**i for i in range(0,num_levels*2+1)]
+        self.conditional_entry_place_dimensions = None
+
+        self.channels = [int(2**i) for i in range(0,num_levels*convs_per_level+1)]
         channel_idx = 1
 
         #ENCODER
@@ -53,116 +58,145 @@ class TCN_VAE(nn.Module):
         cur_W = num_feats
         for i in range(1, self.num_levels+1):
 
-            cur_dilation = (dilation**(i-1), 1)
-            constant_padding = (0,0,dilation**i*(self.kernel_size-2),0)
+            if i == 2:
+                self.conditional_entry_place_dimensions = (self.channels[channel_idx-1], int(cur_H), int(cur_W))
 
-            pad = nn.ConstantPad2d(padding = constant_padding, value=0.0)
-            conv = nn.Conv2d(in_channels=channels[channel_idx-1], out_channels=channels[channel_idx], kernel_size=(self.kernel_size, self.kernel_size), dilation=cur_dilation)
-            batchnorm = nn.BatchNorm2d(num_features=channels[channel_idx])
-            relu = nn.ReLU()
-            dropout = nn.Dropout(p=.2)
-            
-            layers.append(pad)
-            layers.append(conv)
-            layers.append(batchnorm)
-            layers.append(relu)
-            layers.append(dropout)
-            channel_idx += 1
+            for j in range(convs_per_level):
+                cur_dilation = (dilation**(i-1), 1)
+                constant_padding = (0,0,dilation**(i-1)*(self.kernel_size-1),0)
 
-            cur_H += constant_padding[2]
-            cur_W += 0
-            cur_H = np.floor((cur_H + 2*0 - cur_dilation[0] * (self.kernel_size-1) - 1)/ 1 + 1 )
-            cur_W = np.floor((cur_W - 2*0 - cur_dilation[1] * (self.kernel_size-1) - 1)/1 + 1)
-            
-            #same padding for next conv
-            conv = nn.Conv2d(in_channels=channels[channel_idx-1], out_channels=channels[channel_idx], kernel_size=(self.kernel_size, self.kernel_size), dilation=cur_dilation)
-            batchnorm = nn.BatchNorm2d(num_features=channels[channel_idx])
-            maxpool = nn.MaxPool2d(kernel_size=(2,2), ceil_mode=True)
-            
-            layers.append(pad)
-            layers.append(conv)
-            layers.append(batchnorm)
-            layers.append(relu)
-            layers.append(dropout)
+                pad = nn.ConstantPad2d(padding = constant_padding, value=0.0)
+                conv = nn.Conv2d(in_channels=self.channels[channel_idx-1], out_channels=self.channels[channel_idx], kernel_size=(self.kernel_size, self.kernel_size), dilation=cur_dilation)
+                batchnorm = nn.BatchNorm2d(num_features=self.channels[channel_idx])
+                relu = nn.ReLU6()
+                dropout = nn.Dropout(p=.2)
+                
+                layers.append(pad)
+                layers.append(conv)
+                layers.append(batchnorm)
+                layers.append(relu)
+                layers.append(dropout)
+                channel_idx += 1
+
+                cur_H += constant_padding[2]                 
+                cur_W += 0
+
+                #insert conditional data here, so dimensions match and can preprocess cond data in same way
+                if self.conditional and i == 2 and j == 0:
+                    cur_H += 1
+                
+                cur_H = np.floor((cur_H + 2*0 - cur_dilation[0] * (self.kernel_size-1) - 1)/1 + 1 )
+                cur_W = np.floor((cur_W - 2*0 - cur_dilation[1] * (self.kernel_size-1) - 1)/1 + 1)
+
+                
             if i <= num_levels - 1: # and i % 2 == 0:
-                layers.append(maxpool)
-            channel_idx += 1
-
-
-            cur_H += constant_padding[2]
-            cur_W += 0
-            cur_H = np.floor((cur_H + 2*0 - cur_dilation[0] * (self.kernel_size-1) - 1)/ 1 + 1 )
-            cur_W = np.floor((cur_W - 2*0 - cur_dilation[1] * (self.kernel_size-1) - 1)/1 + 1)
-            if i <= num_levels - 1:
+                layers.append(nn.MaxPool2d(kernel_size=(2,2), ceil_mode=True))
                 self.before_pool_dims.append((int(cur_H), int(cur_W)))
                 cur_H = np.ceil(cur_H / 2)
                 cur_W = np.ceil(cur_W / 2)
-
+            
             
         self.encoder_net = nn.Sequential(*layers)
 
-        lin_layer= cur_H*cur_W
-        print(cur_H, cur_W)
-        self.fc41 = nn.Linear(int(channels[-1]*lin_layer), self.latent_dim)
-        self.fc42 = nn.Linear(int(channels[-1]*lin_layer), self.latent_dim)
+        self.last_encoder_conv_dims = (int(cur_H), int(cur_W))
 
-        self.defc1 = nn.Linear(self.latent_dim, int(channels[-1]*lin_layer))
+        lin_layer = cur_H*cur_W
+
+        self.fc41 = nn.Linear(int(self.channels[-1]*lin_layer), self.latent_dim)
+        self.fc42 = nn.Linear(int(self.channels[-1]*lin_layer), self.latent_dim)
+
+        self.defc1 = nn.Linear(self.latent_dim, int(self.channels[-1]*lin_layer))
         
 
+
+
         #DECODER
-        channel_idx = len(channels)-1
+        channel_idx = len(self.channels)-1
 
         layers = []
         for i in range(self.num_levels, 0, -1):
-            upsample = nn.Upsample(scale_factor=2)
-
-            constant_padding = (0,0,dilation**(num_levels-i)*(self.kernel_size-1),0)
-            cur_dilation = (dilation**(num_levels-i), 1)
-            conv_padding = (constant_padding[2], 0)
-
-            pad = nn.ConstantPad2d(padding = constant_padding, value=0.0)
-            if i == 1:
-                conv = nn.ConvTranspose2d(in_channels=channels[channel_idx], out_channels=channels[channel_idx-1], kernel_size=(self.kernel_size,self.kernel_size), padding=(conv_padding[0]+int((self.kernel_size-3)/2),0), dilation=cur_dilation)
-            else:
-                conv = nn.ConvTranspose2d(in_channels=channels[channel_idx], out_channels=channels[channel_idx-1], kernel_size=(self.kernel_size,self.kernel_size), padding=conv_padding, dilation=cur_dilation)
-            
-            batchnorm = nn.BatchNorm2d(num_features=channels[channel_idx-1])
-            relu = nn.ReLU()
-            dropout = nn.Dropout(p=.2)
-
 
             if i <= num_levels - 1 and len(self.before_pool_dims) >= 1:
                 upsample = nn.Upsample(size=(self.before_pool_dims[-1]), mode='nearest')
                 self.before_pool_dims.pop(-1)
                 layers.append(upsample)
 
-            layers.append(pad)
-            layers.append(conv)
-            layers.append(batchnorm)
-            layers.append(relu)
-            layers.append(dropout)
-            channel_idx -= 1
+            for j in range(convs_per_level):
+
+                constant_padding = (0,0,dilation**(num_levels-i)*(self.kernel_size-1),0)
+                cur_dilation = (dilation**(num_levels-i), 1)
+                conv_padding = (constant_padding[2], 0)
+
+                pad = nn.ConstantPad2d(padding = constant_padding, value=0.0)
+
+                #if i == 1:
+                #   conv = nn.ConvTranspose2d(in_channels=self.channels[channel_idx], out_channels=self.channels[channel_idx-1], kernel_size=(self.kernel_size,self.kernel_size), padding=(conv_padding[0]+int((self.kernel_size-3)/2),0), dilation=cur_dilation)
+                #else:
+                conv = nn.ConvTranspose2d(in_channels=self.channels[channel_idx], out_channels=self.channels[channel_idx-1], kernel_size=(self.kernel_size,self.kernel_size), padding=conv_padding, dilation=cur_dilation)
+                
+                batchnorm = nn.BatchNorm2d(num_features=self.channels[channel_idx-1])
+                relu = nn.ReLU6()
+                dropout = nn.Dropout(p=.2)
 
 
-            if i == 1:
-                conv = nn.ConvTranspose2d(in_channels=channels[channel_idx], out_channels=channels[channel_idx-1], kernel_size=(self.kernel_size,self.kernel_size), padding=(conv_padding[0]+int((self.kernel_size-3)/2),0), dilation=cur_dilation)
-            else:
-                conv = nn.ConvTranspose2d(in_channels=channels[channel_idx], out_channels=channels[channel_idx-1], kernel_size=(self.kernel_size,self.kernel_size), padding=conv_padding, dilation=cur_dilation)
-            batchnorm = nn.BatchNorm2d(num_features=channels[channel_idx-1])
-
-            layers.append(pad)
-            layers.append(conv)
-            layers.append(batchnorm)
-            if i >= 2:
-                layers.append(relu)
-                layers.append(dropout)
-            else:
-                layers.append(nn.Sigmoid())
-            channel_idx -= 1
-
-
+                layers.append(pad)
+                layers.append(conv)
+                layers.append(batchnorm)
+                if i == 1 and j == convs_per_level - 1: # last layer sigmoid for 0-1 output
+                    layers.append(nn.Sigmoid())
+                else:
+                    layers.append(relu)
+                    layers.append(dropout)
+                channel_idx -= 1
         
         self.decoder_net = nn.Sequential(*layers)
+
+
+        if self.conditional:
+            #conditional decreasing network
+            layers = []
+            
+            convs_per = 1
+            if convs_per == 2:
+                self.cond_channels = [1, self.conditional_entry_place_dimensions[0] // 2, self.conditional_entry_place_dimensions[0]]
+            elif convs_per==1:
+                self.cond_channels = [1,  self.conditional_entry_place_dimensions[0]]
+
+            cond_channel_idx = 1
+            cur_H = self.cond_window_size
+            cur_W = self.num_feats
+
+            for i in range(1):
+                for j in range(convs_per):
+                    conv = nn.Conv2d(in_channels=self.cond_channels[cond_channel_idx-1], out_channels=self.cond_channels[cond_channel_idx], kernel_size=(self.kernel_size, self.kernel_size))
+                    bn = nn.BatchNorm2d(num_features=self.cond_channels[cond_channel_idx])
+                    relu = nn.ReLU() #regular ReLU should be fine here
+
+                    layers.append(conv)
+                    layers.append(bn)
+                    layers.append(relu)
+                    cond_channel_idx+=1
+
+                    cur_H = np.floor((cur_H + 2*0 - 1 * (self.kernel_size-1) - 1)/1 + 1 )
+                    cur_W = np.floor((cur_W - 2*0 - 1 * (self.kernel_size-1) - 1)/1 + 1)
+
+                    #if i != 2-1:
+                    layers.append(nn.MaxPool2d(kernel_size=(2,2), ceil_mode=True))
+                    cur_H = np.ceil(cur_H / 2)
+                    cur_W = np.ceil(cur_W / 2)
+
+            layers.append(nn.Flatten())
+            layers.append(nn.Linear(int(self.cond_channels[-1]*cur_H*cur_W), int(self.conditional_entry_place_dimensions[0] * 1 * self.conditional_entry_place_dimensions[2])))
+            #layers.append(nn.Sigmoid()) #sigmoid/relu shouldnt really matter but leave it for now
+
+            self.conditional_net = nn.Sequential(*layers)
+        
+
+
+
+
+
+
 
         self.log_sigma = 0
         self.log_sigma = torch.nn.Parameter(torch.full((1,), 0.0)[0], requires_grad=True)
@@ -210,12 +244,19 @@ class TCN_VAE(nn.Module):
 
         
         
-    def encoder(self, x):
+    def encoder(self, x, c):
+        if self.conditional:
+            c = self.conditional_net(c)
+            c = c.view(c.shape[0], self.conditional_entry_place_dimensions[0], 1, int(self.conditional_entry_place_dimensions[2]))
         
-        concat_input = x #torch.cat([x, c], 2)
         
-        h = self.encoder_net(x)
-        self.saved_dim = [h.size(1), h.size(2), h.size(3)]
+        #h = self.encoder_net(x)
+        h = x
+        for layer in self.encoder_net:
+            h = layer(h)
+            if self.conditional:
+                if h.shape[1:] == self.conditional_entry_place_dimensions:
+                    h = torch.cat([h, c], 2)
 
         h = h.view(h.size(0), -1)
         
@@ -229,13 +270,32 @@ class TCN_VAE(nn.Module):
         eps = torch.randn_like(std)
         return eps.mul(std).add(mu) # return z sample
     
-    def decoder(self, z):
+    def decoder(self, z, c):
 
-        concat_input = z 
-        concat_input = self.defc1(concat_input)
+        z = self.defc1(z)
+        z = z.view(z.size(0), self.channels[-1], self.last_encoder_conv_dims[0], self.last_encoder_conv_dims[1])
 
-        concat_input = concat_input.view(concat_input.size(0), self.saved_dim[0], self.saved_dim[1], self.saved_dim[2])
-        out = self.decoder_net(concat_input)
+        if self.conditional:
+            c = self.conditional_net(c)
+            c = c.view(c.shape[0], self.conditional_entry_place_dimensions[0], 1, int(self.conditional_entry_place_dimensions[2]))
+
+        h = z
+
+        for layer in self.decoder_net:
+            h = layer(h)
+            #print('decoder shape : {}'.format(h.shape))
+            if self.conditional:
+                #print(h.shape, self.conditional_entry_place_dimensions, '\n')
+                if h.shape[1] == self.conditional_entry_place_dimensions[0] and h.shape[2]-1 == self.conditional_entry_place_dimensions[1] and h.shape[3] == self.conditional_entry_place_dimensions[2]:
+                    h = torch.cat([h, c], 2)
+
+        out = h
+
+
+        #out = self.decoder_net(concat_input)
+
+
+
 
         if self.prob_decoder:
             out = out.view(out.size(0), out.size(1), -1)
@@ -315,14 +375,17 @@ class TCN_VAE(nn.Module):
 
 
         
-    def forward(self, x):
+    def forward(self, x, c):
 
-        z_params = self.encoder(x)
+
+        #print(x.shape)
+        z_params = self.encoder(x, c)
         mu, log_var = z_params
 
+        #print(mu.shape)
         if self.flow_type == None:
             z = self.sampling(mu, log_var)
-            output, rec_mu, rec_sigma = self.decoder(z)
+            output, rec_mu, rec_sigma = self.decoder(z, c)
             kl = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
 
         else:
@@ -331,8 +394,10 @@ class TCN_VAE(nn.Module):
             else:
                 z_k, kl = self.latent_not_planar(x, z_params)
             
-            output, rec_mu, rec_sigma = self.decoder(z_k)
+            output, rec_mu, rec_sigma = self.decoder(z_k, c)
     
+        #print(output.shape)
+
         return output, rec_mu, rec_sigma, kl
 
 
@@ -359,5 +424,4 @@ class TCN_VAE(nn.Module):
             rec_mu_sigma_loss = self.gaussian_nll(rec_mu, rec_sigma, x).sum()
         
         return rec_comps, rec, rec_mu_sigma_loss, kl
-
 
