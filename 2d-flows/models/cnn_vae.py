@@ -222,8 +222,8 @@ class CNN_VAE(nn.Module):
 
         if self.prob_decoder:
             out = out.view(out.size(0), out.size(1), -1)
-            rec_mu = self.decoder_fc41(out)#.tanh()
-            rec_sigma = self.decoder_fc42(out)#.tanh()
+            rec_mu = self.decoder_fc41(out)
+            rec_sigma = self.decoder_fc42(out)
 
             out = out.view(out.size(0), 1, self.window_size, self.num_feats)
             rec_mu = rec_mu.view(rec_mu.size(0), 1, self.window_size, self.num_feats)
