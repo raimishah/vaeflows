@@ -282,7 +282,7 @@ class TCN_VAE(nn.Module):
         
         mu, var = self.fc41(h), self.fc42(h)
                 
-        return self.fc41(h), self.fc42(h)
+        return mu, var
 
     
     def sampling(self, mu, log_var):

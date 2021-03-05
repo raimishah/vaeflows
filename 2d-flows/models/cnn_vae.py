@@ -43,9 +43,10 @@ class CNN_VAE(nn.Module):
         self.kernel_size = kernel_size # tuple for 2d
         self.num_levels = num_levels
         self.convs_per_level = convs_per_level
-
         self.before_pool_dims = []
         self.last_encoder_conv_dims = (-1,-1)
+
+        self.conditional_entry_place_dimensions = None
 
         self.channels=channels
         #self.channels = [int(2**i) for i in range(0,num_levels*convs_per_level+1)]
@@ -57,6 +58,10 @@ class CNN_VAE(nn.Module):
 
         layers = []
         for i in range(1, self.num_levels+1):
+            
+            if i == 2:
+                self.conditional_entry_place_dimensions = (self.channels[channel_idx-1], int(cur_H), int(cur_W))
+
             for j in range(self.convs_per_level):
 
                 conv = nn.Conv2d(in_channels=self.channels[channel_idx-1], out_channels=self.channels[channel_idx], kernel_size=self.kernel_size)
@@ -69,6 +74,11 @@ class CNN_VAE(nn.Module):
                 layers.append(batchnorm)
                 #layers.append(dropout)
                 channel_idx += 1
+
+                #insert conditional data here, so dimensions match and can preprocess cond data in same way
+                if self.conditional and i == 2 and j == 0:
+                    cur_H += 1
+
 
                 cur_H = np.floor((cur_H + 2*0 - 1 * (self.kernel_size[0]-1) - 1)/1 + 1 )
                 cur_W = np.floor((cur_W + 2*0 - 1 * (self.kernel_size[1]-1) - 1)/1 + 1)
@@ -134,6 +144,49 @@ class CNN_VAE(nn.Module):
         #---------- END DECODER ----------
 
 
+        #---------- CONDITIIONAL NET ----------
+        if self.conditional:
+            #conditional decreasing network
+            layers = []
+            
+            convs_per = 1
+            if convs_per == 2:
+                self.cond_channels = [1, self.conditional_entry_place_dimensions[0] // 2, self.conditional_entry_place_dimensions[0]]
+            elif convs_per==1:
+                self.cond_channels = [1,  self.conditional_entry_place_dimensions[0]]
+
+            cond_channel_idx = 1
+            cur_H = self.cond_window_size
+            cur_W = self.num_feats
+
+            for i in range(1):
+                for j in range(convs_per):
+                    conv = nn.Conv2d(in_channels=self.cond_channels[cond_channel_idx-1], out_channels=self.cond_channels[cond_channel_idx], kernel_size=self.kernel_size)
+                    bn = nn.BatchNorm2d(num_features=self.cond_channels[cond_channel_idx])
+                    relu = nn.ReLU() #regular ReLU should be fine here
+
+                    layers.append(conv)
+                    layers.append(bn)
+                    layers.append(relu)
+                    cond_channel_idx+=1
+
+                    cur_H = np.floor((cur_H + 2*0 - 1 * (self.kernel_size[0]-1) - 1)/1 + 1 )
+                    cur_W = np.floor((cur_W - 2*0 - 1 * (self.kernel_size[1]-1) - 1)/1 + 1)
+
+                    #if i != 2-1:
+                    #layers.append(nn.MaxPool2d(kernel_size=(2,2), ceil_mode=True))
+                    #cur_H = np.ceil(cur_H / 2)
+                    #cur_W = np.ceil(cur_W / 2)
+
+            layers.append(nn.Flatten())
+            layers.append(nn.Linear(int(self.cond_channels[-1]*cur_H*cur_W), int(self.conditional_entry_place_dimensions[0] * 1 * self.conditional_entry_place_dimensions[2])))
+
+            self.conditional_net = nn.Sequential(*layers)
+            #---------- END CONDITIONAL NET ----------
+
+
+
+
         #sigmaVAE
         self.log_sigma = 0
         self.log_sigma = torch.nn.Parameter(torch.full((1,), 0.0)[0], requires_grad=True)
@@ -188,11 +241,20 @@ class CNN_VAE(nn.Module):
             self.flow = Sequential(*flows).to(device)
 
     def encoder(self, x, c):
+        
+        if self.conditional:
+            c = self.conditional_net(c)
+            c = c.view(c.shape[0], self.conditional_entry_place_dimensions[0], 1, int(self.conditional_entry_place_dimensions[2]))
+        
         #h = self.encoder_net(x)
         h = x
         for layer in self.encoder_net:
             h = layer(h)
             #print(h.shape)
+            if self.conditional:
+                if h.shape[1:] == self.conditional_entry_place_dimensions:
+                    h = torch.cat([h, c], 2)
+
             
         h = h.view(h.size(0), -1)
         
@@ -212,10 +274,16 @@ class CNN_VAE(nn.Module):
         z = z.view(z.size(0), self.channels[-1], self.last_encoder_conv_dims[0], self.last_encoder_conv_dims[1])
         #print('z reshaped : {}'.format(z.shape))
 
+        if self.conditional:
+            c = self.conditional_net(c)
+            c = c.view(c.shape[0], self.conditional_entry_place_dimensions[0], 1, int(self.conditional_entry_place_dimensions[2]))
+
         h = z
         for layer in self.decoder_net:
             h = layer(h)
-            #print(h.shape)
+            if self.conditional:
+                if h.shape[1] == self.conditional_entry_place_dimensions[0] and h.shape[2]-1 == self.conditional_entry_place_dimensions[1] and h.shape[3] == self.conditional_entry_place_dimensions[2]:
+                    h = torch.cat([h, c], 2)
 
 
         out = h
