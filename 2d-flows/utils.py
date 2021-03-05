@@ -35,37 +35,6 @@ def softclip(tensor, min):
 
 
 
-'''
-def plot_train_test_reconstructions(model, X_train_tensor, X_train_data, X_test_tensor,X_test_data):
-    torch.no_grad()
-    for X_tensor, X_data in [(X_train_tensor,X_train_data),(X_test_tensor,X_test_data)]:
-        X_tensor = X_tensor.cuda() if torch.cuda.is_available() else X_tensor.cpu()
-        X_tensor.to(device)
-        out_pred, _,_,_= model(X_tensor)
-        out_pred = out_pred.cpu().detach().numpy()
-        
-        
-        idx = 0
-        preds=np.zeros((out_pred.shape[0]*out_pred.shape[2], out_pred.shape[3]))
-
-        time_idx=0
-        
-        window_size = X_train_tensor.shape[2]
-        
-        for i in range(len(out_pred)):
-            preds[time_idx:time_idx+window_size, :] = out_pred[i, 0, :window_size, :]
-            time_idx += window_size
-
-        
-        for i in range(preds.shape[1]):
-            plt.figure()
-            plt.plot(X_data[:, i],alpha=.5)
-            plt.plot(preds[:, i],alpha=.5)
-            plt.show()
-        
-        mse = mean_squared_error(X_data[:len(preds), :], preds)
-        print('MSE : ' + str(np.round(mse,5)))
-'''
 
 def plot_reconstruction(model, model_type, dataloader):
     model.eval()
@@ -86,10 +55,10 @@ def plot_reconstruction(model, model_type, dataloader):
         x.to(device)
         y = y.cuda() if torch.cuda.is_available() else y.cpu()
         y.to(device)
-        if model_type=='cvae':
+        if 'cvae' in model_type:
             outputs, rec_mu, rec_sigma, kl = model(x, y)
         else:
-            outputs, rec_mu, rec_sigma, kl = model(x)
+            outputs, rec_mu, rec_sigma, kl = model(x, None)
         
         preds = np.concatenate([preds, outputs.cpu().detach().numpy()])
         reals = np.concatenate([reals, x.cpu().detach().numpy()])
@@ -106,26 +75,6 @@ def plot_reconstruction(model, model_type, dataloader):
     preds = temp_preds
     reals = temp_reals
     
-    '''
-    if model_type=='cvae':
-        temp_preds=np.zeros((preds.shape[0]*cond_window_size, preds.shape[3]))
-        temp_reals=np.zeros((preds.shape[0]*cond_window_size, preds.shape[3]))
-        time_idx=0
-        for i in range(len(preds)):
-            #temp_preds[time_idx:time_idx+cond_window_size, :] = preds[i, 0, :cond_window_size, :]
-            #temp_reals[time_idx:time_idx+cond_window_size, :] = reals[i, 0, :cond_window_size, :]
-            #time_idx += cond_window_size
-            temp_preds[time_idx:time_idx+jump_size, :] = preds[i, 0, :jump_size, :]
-            temp_reals[time_idx:time_idx+jump_size, :] = reals[i, 0, :jump_size, :]
-            time_idx += jump_size
-
-        preds = temp_preds
-        reals = temp_reals
-    
-    else:
-        preds = np.reshape(preds, (preds.shape[0] * preds.shape[2], preds.shape[3]))
-        reals = np.reshape(reals, (reals.shape[0] * reals.shape[2], reals.shape[3]))
-    '''
 
     i=0
     num_per_row=4
@@ -173,10 +122,10 @@ def plot_reconstruction_prob_decoder(model, model_type, dataloader, X_tensor):
         x.to(device)
         y = y.cuda() if torch.cuda.is_available() else y.cpu()
         y.to(device)
-        if model_type=='cvae':
+        if 'cvae' in model_type:
             outputs, rec_mu, rec_sigma, kl = model(x, y)
         else:
-            outputs, rec_mu, rec_sigma, kl = model(x)
+            outputs, rec_mu, rec_sigma, kl = model(x, None)
         
         preds = np.concatenate([preds, outputs.cpu().detach().numpy()])
         rec_mus = np.concatenate([rec_mus, rec_mu.cpu().detach().numpy()])
@@ -196,24 +145,6 @@ def plot_reconstruction_prob_decoder(model, model_type, dataloader, X_tensor):
     preds = temp_preds
     reals = temp_reals
     
-    '''
-    if model_type=='cvae':
-        temp_preds=np.zeros((preds.shape[0]*cond_window_size, preds.shape[3]))
-        temp_reals=np.zeros((reals.shape[0]*cond_window_size, reals.shape[3]))
-        
-        time_idx=0
-        for i in range(len(preds)):
-            temp_preds[time_idx:time_idx+cond_window_size, :] = preds[i, 0, :cond_window_size, :]
-            temp_reals[time_idx:time_idx+cond_window_size, :] = reals[i, 0, :cond_window_size, :]
-            time_idx += cond_window_size
-
-        preds = temp_preds
-        reals = temp_reals
-
-    else:
-        preds = np.reshape(preds, (preds.shape[0] * preds.shape[2], preds.shape[3]))
-        reals = np.reshape(reals, (reals.shape[0] * reals.shape[2], reals.shape[3]))
-    '''
 
     probs = []
     mu_to_plot = []#np.zeros_like(reals)
@@ -282,6 +213,12 @@ def read_machine_data(machine_name, window_size, jump_size, batch_size):
     X_train_data = df_X_train.values.copy()
     X_test_data = df_X_test.values.copy()
 
+    #MSL data not 0-1... renormalize here...
+    if 'MSL' in machine_name:
+        scaler = MinMaxScaler()
+        scaler.fit(X_train_data)
+        X_train_data = scaler.transform(X_train_data)
+        X_test_data = scaler.transform(X_test_data)
 
     #window it
     window = window_size
@@ -322,6 +259,13 @@ def read_machine_data_with_validation(machine_name, window_size, jump_size, batc
 
     X_train_data = df_X_train.values.copy()
     X_test_data = df_X_test.values.copy()
+
+    #MSL data not 0-1... renormalize here...
+    if 'MSL' in machine_name:
+        scaler = MinMaxScaler()
+        scaler.fit(X_train_data)
+        X_train_data = scaler.transform(X_train_data)
+        X_test_data = scaler.transform(X_test_data)
 
     #window it
     window = window_size
@@ -372,6 +316,13 @@ def read_machine_data_cvae(machine_name, window_size, cond_window_size, jump_siz
 
     X_train_data = df_X_train.values.copy()
     X_test_data = df_X_test.values.copy()
+
+    #MSL data not 0-1... renormalize here...
+    if 'MSL' in machine_name:
+        scaler = MinMaxScaler()
+        scaler.fit(X_train_data)
+        X_train_data = scaler.transform(X_train_data)
+        X_test_data = scaler.transform(X_test_data)
 
 
     #train data first
@@ -425,6 +376,13 @@ def read_machine_data_cvae_with_validation(machine_name, window_size, cond_windo
 
     X_train_data = df_X_train.values.copy()
     X_test_data = df_X_test.values.copy()
+
+    #MSL data not 0-1... renormalize here...
+    if 'MSL' in machine_name:
+        scaler = MinMaxScaler()
+        scaler.fit(X_train_data)
+        X_train_data = scaler.transform(X_train_data)
+        X_test_data = scaler.transform(X_test_data)
 
 
     #train data first

@@ -18,13 +18,13 @@ from torchvision import transforms
 
 from early_stopping import EarlyStopping
 
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-class TCN_Trainer(nn.Module):
+
+class CNN_Trainer(nn.Module):
 
     def __init__(self, data_name, model_type, flow_type=None, early_stop_patience=5):
-        super(TCN_Trainer, self).__init__()
+        super(CNN_Trainer, self).__init__()
 
         self.losses = []
         self.val_losses = []
@@ -66,9 +66,7 @@ class TCN_Trainer(nn.Module):
                 else:
                     outputs, rec_mu, rec_sigma, kl = model(x, None)
 
-                #no prob decoder for this TCN
-                rec_comps, rec, rec_mu_sigma_loss, kl = model.loss_function(outputs[:, :, -model.jump_size:, :], x[:, :, -model.jump_size:, :], rec_mu, rec_sigma, kl)
-                #rec_comps, rec, rec_mu_sigma_loss, kl = model.loss_function(outputs, x, rec_mu, rec_sigma, kl)
+                rec_comps, rec, rec_mu_sigma_loss, kl = model.loss_function(outputs, x, rec_mu, rec_sigma, kl)
 
                 loss = rec + kl + rec_mu_sigma_loss
 
@@ -120,13 +118,9 @@ class TCN_Trainer(nn.Module):
                         #TODO
                         #DO REAL MSE INSTEAD OF LOSS_FUNCTION -- causing issue with early stopping I think
                         if model.prob_decoder:
-                            
-                            #no prob decoder implemented for tcn vae
-                            #rec = torch.sum((outputs[:, :, -model.jump_size:, :] -  x[:, :, -model.jump_size:, :])**2)
-                            rec = torch.sum((rec_mu - x) ** 2)
+                            rec = torch.sum((rec_mu - x) ** 2)                        
                         else:
-                            rec = torch.sum((outputs[:, :, -model.jump_size:, :] -  x[:, :, -model.jump_size:, :])**2)
-                            #rec = torch.sum((outputs - x) ** 2)
+                            rec = torch.sum((outputs - x) ** 2)
 
                         #_, rec, _, _ = model.loss_function(outputs, x, rec_mu, rec_sigma, kl)
 
