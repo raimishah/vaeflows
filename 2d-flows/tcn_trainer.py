@@ -67,7 +67,7 @@ class TCN_Trainer(nn.Module):
                     outputs, rec_mu, rec_sigma, kl = model(x, None)
 
                 #no prob decoder for this TCN
-                rec_comps, rec, rec_mu_sigma_loss, kl = model.loss_function(outputs[:, :, -model.jump_size:, :], x[:, :, -model.jump_size:, :], rec_mu, rec_sigma, kl)
+                rec_comps, rec, rec_mu_sigma_loss, kl = model.loss_function(outputs[:, :, -model.jump_size:, :], x[:, :, -model.jump_size:, :], rec_mu[:, :, -model.jump_size:, :], rec_sigma[:, :, -model.jump_size:, :], kl)
                 #rec_comps, rec, rec_mu_sigma_loss, kl = model.loss_function(outputs, x, rec_mu, rec_sigma, kl)
 
                 loss = rec + kl + rec_mu_sigma_loss
