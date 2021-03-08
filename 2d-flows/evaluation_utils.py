@@ -270,10 +270,12 @@ def evaluate_model_new(model, model_type, dataloader, X_tensor):
         x.to(device)
         y = y.cuda() if torch.cuda.is_available() else y.cpu()
         y.to(device)
-        if model_type=='cvae':
+        if 'cvae' in model_type:
             outputs, rec_mu, rec_sigma, kl = model(x, y)
-        else:
+        elif 'sigma' in model_type:
             outputs, rec_mu, rec_sigma, kl = model(x)
+        else:
+            outputs, rec_mu, rec_sigma, kl = model(x, None)
         
         preds = np.concatenate([preds, outputs.cpu().detach().numpy()])
         if model.prob_decoder:
@@ -364,10 +366,10 @@ def evaluate_model_tcn(model, model_type, dataloader, X_tensor):
         x.to(device)
         y = y.cuda() if torch.cuda.is_available() else y.cpu()
         y.to(device)
-        if model_type=='cvae':
+        if 'cvae' in model_type:
             outputs, rec_mu, rec_sigma, kl = model(x, y)
         else:
-            outputs, rec_mu, rec_sigma, kl = model(x)
+            outputs, rec_mu, rec_sigma, kl = model(x, None)
         
         preds = np.concatenate([preds, outputs.cpu().detach().numpy()])
         if model.prob_decoder:
