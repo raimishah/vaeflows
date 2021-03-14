@@ -21,6 +21,7 @@ from utils import softclip
 from maf import MAF, RealNVP
 from planar_flow import PlanarFlow, NormalizingFlow
 from bnaf import Tanh, MaskedWeight, BNAF, Sequential, Permutation
+import naf
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -29,7 +30,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class TCN_VAE(nn.Module):
 
-    def __init__(self, conditional=False, latent_dim=10, window_size=32, cond_window_size=32, jump_size=32, num_feats=38, kernel_size=(5,5), num_levels=2, convs_per_level = 2, channels=[0], flow_type=None, use_probabilistic_decoder=False):
+    def __init__(self,conditional=False, latent_dim=10, window_size=32, cond_window_size=32, jump_size=32, num_feats=38, kernel_size=(3,3), num_levels=2, convs_per_level = [], channels = [0], cond_kernel_size=(3,3), flow_type=None, use_probabilistic_decoder=False):
         super(TCN_VAE, self).__init__()
     
         self.conditional = conditional
@@ -40,16 +41,15 @@ class TCN_VAE(nn.Module):
         self.prob_decoder = use_probabilistic_decoder
         self.num_feats = num_feats
         self.flow_type = flow_type
-        self.kernel_size = kernel_size
+        self.kernel_size = kernel_size # tuple for 2d
+        self.cond_kernel_size = cond_kernel_size
         self.num_levels = num_levels
         self.convs_per_level = convs_per_level
         self.before_pool_dims = []
         self.last_encoder_conv_dims = (-1,-1)
-
         self.conditional_entry_place_dimensions = None
-
+        self.pool2x2_idxs = []
         self.channels=channels
-        #self.channels = [int(2**i) for i in range(0,num_levels*convs_per_level+1)]
 
         #---------- ENCODER ----------
         dilation_base=2
@@ -63,7 +63,7 @@ class TCN_VAE(nn.Module):
             if i == 2:
                 self.conditional_entry_place_dimensions = (self.channels[channel_idx-1], int(cur_H), int(cur_W))
 
-            for j in range(convs_per_level):
+            for j in range(self.convs_per_level[i-1]):
                 cur_dilation = (dilation_base**(i-1), 1)
                 constant_padding = (0,0,dilation_base**(i-1)*(self.kernel_size[0]-1),0)
 
@@ -93,8 +93,7 @@ class TCN_VAE(nn.Module):
 
                 
             if i <= num_levels - 1: # and i % 2 == 0:
-                layers.append(nn.MaxPool2d(kernel_size=(2,2), ceil_mode=True))
-                self.before_pool_dims.append((int(cur_H), int(cur_W)))
+                layers.append(nn.MaxPool2d(kernel_size=(2,2), ceil_mode=True, return_indices=True))
                 cur_H = np.ceil(cur_H / 2)
                 cur_W = np.ceil(cur_W / 2)
             
@@ -123,19 +122,34 @@ class TCN_VAE(nn.Module):
         layers = []
         for i in range(self.num_levels, 0, -1):
 
-            if i <= num_levels - 1 and len(self.before_pool_dims) >= 1:
-                upsample = nn.Upsample(size=(self.before_pool_dims[-1]), mode='nearest')
-                self.before_pool_dims.pop(-1)
+            if i <= num_levels - 1: #and len(self.before_pool_dims) >= 1:
+                #upsample = nn.Upsample(size=(self.before_pool_dims[-1]), mode='nearest')
+                #self.before_pool_dims.pop(-1)
+
+                upsample = nn.MaxUnpool2d((2,2))
                 layers.append(upsample)
 
-            for j in range(convs_per_level):
+            for j in range(convs_per_level[i-1]):
+                if self.conditional:
+                    if i == 2 and j == self.convs_per_level[i-1] - 1:
+                        constant_padding = (0,0,dilation_base**(num_levels-i)*(self.kernel_size[0]-1),0)
+                        cur_dilation = (dilation_base**(num_levels-i), 1)
+                        conv_padding = (constant_padding[2]+1, 0)
+                        after_conv_padding = (0,0,1,0)
+                    else:
+                        constant_padding = (0,0,dilation_base**(num_levels-i)*(self.kernel_size[0]-1),0)
+                        cur_dilation = (dilation_base**(num_levels-i), 1)
+                        conv_padding = (constant_padding[2], 0)
+                        after_conv_padding = (0,0,0,0)
 
-                constant_padding = (0,0,dilation_base**(num_levels-i)*(self.kernel_size[0]-1),0)
-                cur_dilation = (dilation_base**(num_levels-i), 1)
-                conv_padding = (constant_padding[2], 0)
+                else:
+                    constant_padding = (0,0,dilation_base**(num_levels-i)*(self.kernel_size[0]-1),0)
+                    cur_dilation = (dilation_base**(num_levels-i), 1)
+                    conv_padding = (constant_padding[2], 0)
 
                 pad = nn.ConstantPad2d(padding = constant_padding, value=0.0)
-
+                after_conv_pad = nn.ConstantPad2d(padding = after_conv_padding, value=0.0)
+                
                 #if i == 1:
                 #   conv = nn.ConvTranspose2d(in_channels=self.channels[channel_idx], out_channels=self.channels[channel_idx-1], kernel_size=(self.kernel_size,self.kernel_size), padding=(conv_padding[0]+int((self.kernel_size-3)/2),0), dilation=cur_dilation)
                 #else:
@@ -148,8 +162,9 @@ class TCN_VAE(nn.Module):
 
                 layers.append(pad)
                 layers.append(conv)
+                layers.append(after_conv_pad)
                 '''
-                if i == 1 and j == self.convs_per_level-1:
+                if i == 1 and j == self.convs_per_level[0]-1:
                     layers.append(nn.Sigmoid()) 
                 else:
                     layers.append(relu)
@@ -157,7 +172,7 @@ class TCN_VAE(nn.Module):
                     #layers.append(dropout)
                 '''
 
-                if not (i == 1 and j == self.convs_per_level-1):
+                if not (i == 1 and j == self.convs_per_level[0]-1):
                     layers.append(relu)
                     layers.append(batchnorm)
                     #layers.append(dropout)
@@ -173,7 +188,7 @@ class TCN_VAE(nn.Module):
             #conditional decreasing network
             layers = []
             
-            convs_per = 1
+            convs_per = 2
             if convs_per == 2:
                 self.cond_channels = [1, self.conditional_entry_place_dimensions[0] // 2, self.conditional_entry_place_dimensions[0]]
             elif convs_per==1:
@@ -185,7 +200,7 @@ class TCN_VAE(nn.Module):
 
             for i in range(1):
                 for j in range(convs_per):
-                    conv = nn.Conv2d(in_channels=self.cond_channels[cond_channel_idx-1], out_channels=self.cond_channels[cond_channel_idx], kernel_size=self.kernel_size)
+                    conv = nn.Conv2d(in_channels=self.cond_channels[cond_channel_idx-1], out_channels=self.cond_channels[cond_channel_idx], kernel_size=self.cond_kernel_size)
                     bn = nn.BatchNorm2d(num_features=self.cond_channels[cond_channel_idx])
                     relu = nn.ReLU() #regular ReLU should be fine here
 
@@ -194,8 +209,8 @@ class TCN_VAE(nn.Module):
                     layers.append(relu)
                     cond_channel_idx+=1
 
-                    cur_H = np.floor((cur_H + 2*0 - 1 * (self.kernel_size[0]-1) - 1)/1 + 1 )
-                    cur_W = np.floor((cur_W - 2*0 - 1 * (self.kernel_size[1]-1) - 1)/1 + 1)
+                    cur_H = np.floor((cur_H + 2*0 - 1 * (self.cond_kernel_size[0]-1) - 1)/1 + 1 )
+                    cur_W = np.floor((cur_W - 2*0 - 1 * (self.cond_kernel_size[1]-1) - 1)/1 + 1)
 
                     #if i != 2-1:
                     #layers.append(nn.MaxPool2d(kernel_size=(2,2), ceil_mode=True))
@@ -234,11 +249,16 @@ class TCN_VAE(nn.Module):
             self.block_planar = [PlanarFlow]
             self.flow = NormalizingFlow(dim=self.latent_dim, blocks=self.block_planar, flow_length=16, density=distrib.MultivariateNormal(torch.zeros(self.latent_dim), torch.eye(self.latent_dim)))
 
+        elif self.flow_type=='DSF':
+            #self.lgd = torch.autograd.Variable(torch.from_numpy(np.random.rand(self.window_size).astype('float32')))    
+            hidden_dim = 100
+            self.flow = naf.IAF_DSF(dim=latent_dim, hid_dim=hidden_dim, context_dim=self.cond_window_size*self.num_feats, num_layers=3)
+
         elif self.flow_type =='BNAF':
-            num_flows = 2
+            num_flows = 1
             num_layers = 2
             n_dims = self.latent_dim
-            hidden_dim = 30
+            hidden_dim = 100
             residual = None
 
             flows = []
@@ -273,7 +293,12 @@ class TCN_VAE(nn.Module):
         #h = self.encoder_net(x)
         h = x
         for layer in self.encoder_net:
-            h = layer(h)
+            if isinstance(layer, nn.MaxPool2d):
+                self.before_pool_dims.append((h.shape[2], h.shape[3]))
+                h,pool_idxs = layer(h)
+                self.pool2x2_idxs.append(pool_idxs)
+            else:
+                h = layer(h)
             if self.conditional:
                 if h.shape[1:] == self.conditional_entry_place_dimensions:
                     h = torch.cat([h, c], 2)
@@ -291,7 +316,6 @@ class TCN_VAE(nn.Module):
         return eps.mul(std).add(mu) # return z sample
     
     def decoder(self, z, c):
-
         z = self.defc1(z)
         z = z.view(z.size(0), self.channels[-1], self.last_encoder_conv_dims[0], self.last_encoder_conv_dims[1])
 
@@ -300,10 +324,14 @@ class TCN_VAE(nn.Module):
             c = c.view(c.shape[0], self.conditional_entry_place_dimensions[0], 1, int(self.conditional_entry_place_dimensions[2]))
 
         h = z
-
+        
         for layer in self.decoder_net:
-            h = layer(h)
-            #print('decoder shape : {}'.format(h.shape))
+            if isinstance(layer, nn.MaxUnpool2d):
+                h = layer(h, self.pool2x2_idxs[-1], output_size=self.before_pool_dims[-1])
+                self.before_pool_dims.pop(-1)
+                self.pool2x2_idxs.pop(-1)
+            else:
+                h = layer(h)
             if self.conditional:
                 #print(h.shape, self.conditional_entry_place_dimensions, '\n')
                 if h.shape[1] == self.conditional_entry_place_dimensions[0] and h.shape[2]-1 == self.conditional_entry_place_dimensions[1] and h.shape[3] == self.conditional_entry_place_dimensions[2]:
@@ -325,7 +353,6 @@ class TCN_VAE(nn.Module):
             out = out.view(out.size(0), 1, self.window_size, self.num_feats)
             rec_mu = rec_mu.view(rec_mu.size(0), 1, self.window_size, self.num_feats)
             rec_sigma = rec_sigma.view(rec_sigma.size(0), 1, self.window_size, self.num_feats)
-
 
             return out, rec_mu, rec_sigma
 
@@ -383,12 +410,19 @@ class TCN_VAE(nn.Module):
         
         # Obtain our first set of latent points
         z0 = self.sampling(mu, log_var)
-        
+        if self.conditional:
+            c = c.view(c.size(0), -1)
+
         if self.flow_type == 'BNAF':
             zk, loss = self.flow(z0)
         else:
             if self.conditional:
-                zk, loss = self.flow.log_prob(z0, c)
+                if self.flow_type=='DSF':
+                    self.lgd = torch.autograd.Variable(torch.from_numpy(np.random.rand(z0.shape[0]).astype('float32'))).to(device)    
+                    zk, loss, _ = self.flow.forward((z0, self.lgd, c))
+
+                else:
+                    zk, loss = self.flow.log_prob(z0, c)
             else:
                 zk, loss = self.flow.log_prob(z0, None)
 

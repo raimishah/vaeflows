@@ -63,11 +63,22 @@ class TCN_Trainer(nn.Module):
 
                 if 'cvae' in self.model_type:
                     outputs, rec_mu, rec_sigma, kl = model(x, y)
+                    if model.prob_decoder:
+                        rec_comps, rec, rec_mu_sigma_loss, kl = model.loss_function(outputs[:, :, -model.jump_size:, :], x[:, :, -model.jump_size:, :], rec_mu[:, :, -model.jump_size:, :], rec_sigma[:, :, -model.jump_size:, :], kl)
+                    else:
+                        rec_comps, rec, rec_mu_sigma_loss, kl = model.loss_function(outputs[:, :, -model.jump_size:, :], x[:, :, -model.jump_size:, :], rec_mu, rec_sigma, kl)
+
+
                 else:
                     outputs, rec_mu, rec_sigma, kl = model(x, None)
+                    if model.prob_decoder:
+                        rec_comps, rec, rec_mu_sigma_loss, kl = model.loss_function(outputs[:, :, -model.jump_size:, :], x[:, :, -model.jump_size:, :], rec_mu[:, :, -model.jump_size:, :], rec_sigma[:, :, -model.jump_size:, :], kl)
+                    else:
+                        rec_comps, rec, rec_mu_sigma_loss, kl = model.loss_function(outputs[:, :, -model.jump_size:, :], x[:, :, -model.jump_size:, :], rec_mu, rec_sigma, kl)
+
 
                 #no prob decoder for this TCN
-                rec_comps, rec, rec_mu_sigma_loss, kl = model.loss_function(outputs[:, :, -model.jump_size:, :], x[:, :, -model.jump_size:, :], rec_mu[:, :, -model.jump_size:, :], rec_sigma[:, :, -model.jump_size:, :], kl)
+                #rec_comps, rec, rec_mu_sigma_loss, kl = model.loss_function(outputs[:, :, -model.jump_size:, :], x[:, :, -model.jump_size:, :], rec_mu[:, :, -model.jump_size:, :], rec_sigma[:, :, -model.jump_size:, :], kl)
                 #rec_comps, rec, rec_mu_sigma_loss, kl = model.loss_function(outputs, x, rec_mu, rec_sigma, kl)
 
                 loss = rec + kl + rec_mu_sigma_loss
