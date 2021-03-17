@@ -146,6 +146,8 @@ class TCN_VAE(nn.Module):
                     constant_padding = (0,0,dilation_base**(num_levels-i)*(self.kernel_size[0]-1),0)
                     cur_dilation = (dilation_base**(num_levels-i), 1)
                     conv_padding = (constant_padding[2], 0)
+                    after_conv_padding = (0,0,0,0)
+
 
                 pad = nn.ConstantPad2d(padding = constant_padding, value=0.0)
                 after_conv_pad = nn.ConstantPad2d(padding = after_conv_padding, value=0.0)
@@ -184,7 +186,7 @@ class TCN_VAE(nn.Module):
 
 
         #---------- CONDITIIONAL NET ----------
-        if self.conditional:
+        if self.conditional and self.num_levels > 1:
             #conditional decreasing network
             layers = []
             
@@ -285,7 +287,7 @@ class TCN_VAE(nn.Module):
         
         
     def encoder(self, x, c):
-        if self.conditional:
+        if self.conditional and self.num_levels > 1:
             c = self.conditional_net(c)
             c = c.view(c.shape[0], self.conditional_entry_place_dimensions[0], 1, int(self.conditional_entry_place_dimensions[2]))
         
@@ -299,7 +301,7 @@ class TCN_VAE(nn.Module):
                 self.pool2x2_idxs.append(pool_idxs)
             else:
                 h = layer(h)
-            if self.conditional:
+            if self.conditional and self.num_levels > 1:
                 if h.shape[1:] == self.conditional_entry_place_dimensions:
                     h = torch.cat([h, c], 2)
 
@@ -319,7 +321,7 @@ class TCN_VAE(nn.Module):
         z = self.defc1(z)
         z = z.view(z.size(0), self.channels[-1], self.last_encoder_conv_dims[0], self.last_encoder_conv_dims[1])
 
-        if self.conditional:
+        if self.conditional and self.num_levels > 1:
             c = self.conditional_net(c)
             c = c.view(c.shape[0], self.conditional_entry_place_dimensions[0], 1, int(self.conditional_entry_place_dimensions[2]))
 
@@ -332,7 +334,7 @@ class TCN_VAE(nn.Module):
                 self.pool2x2_idxs.pop(-1)
             else:
                 h = layer(h)
-            if self.conditional:
+            if self.conditional and self.num_levels > 1:
                 #print(h.shape, self.conditional_entry_place_dimensions, '\n')
                 if h.shape[1] == self.conditional_entry_place_dimensions[0] and h.shape[2]-1 == self.conditional_entry_place_dimensions[1] and h.shape[3] == self.conditional_entry_place_dimensions[2]:
                     h = torch.cat([h, c], 2)
@@ -481,4 +483,3 @@ class TCN_VAE(nn.Module):
             rec_mu_sigma_loss = self.gaussian_nll(rec_mu, rec_sigma, x).sum()
         
         return rec_comps, rec, rec_mu_sigma_loss, kl
-

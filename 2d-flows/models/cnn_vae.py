@@ -153,7 +153,7 @@ class CNN_VAE(nn.Module):
 
 
         #---------- CONDITIIONAL NET ----------
-        if self.conditional:
+        if self.conditional and self.num_levels > 1:
             #conditional decreasing network
             layers = []
             
@@ -255,7 +255,7 @@ class CNN_VAE(nn.Module):
 
     def encoder(self, x, c):
         
-        if self.conditional:
+        if self.conditional and self.num_levels > 1:
             c = self.conditional_net(c)
             c = c.view(c.shape[0], self.conditional_entry_place_dimensions[0], 1, int(self.conditional_entry_place_dimensions[2]))
         
@@ -268,7 +268,7 @@ class CNN_VAE(nn.Module):
                 self.pool2x2_idxs.append(pool_idxs)
             else:
                 h = layer(h)
-            if self.conditional:
+            if self.conditional and self.num_levels > 1:
                 if h.shape[1:] == self.conditional_entry_place_dimensions:
                     h = torch.cat([h, c], 2)
 
@@ -291,7 +291,7 @@ class CNN_VAE(nn.Module):
         z = z.view(z.size(0), self.channels[-1], self.last_encoder_conv_dims[0], self.last_encoder_conv_dims[1])
         #print('z reshaped : {}'.format(z.shape))
 
-        if self.conditional:
+        if self.conditional and self.num_levels > 1:
             c = self.conditional_net(c)
             c = c.view(c.shape[0], self.conditional_entry_place_dimensions[0], 1, int(self.conditional_entry_place_dimensions[2]))
 
@@ -304,7 +304,7 @@ class CNN_VAE(nn.Module):
             else:
                 h = layer(h)
 
-            if self.conditional:
+            if self.conditional and self.num_levels > 1:
                 if h.shape[1] == self.conditional_entry_place_dimensions[0] and h.shape[2]-1 == self.conditional_entry_place_dimensions[1] and h.shape[3] == self.conditional_entry_place_dimensions[2]:
                     h = torch.cat([h, c], 2)
 

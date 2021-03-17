@@ -46,8 +46,9 @@ class TCN_Trainer(nn.Module):
         early_stopped=False
 
         val_flag=False
+        flag = False
         for epoch in tq:
-            flag = False
+            #flag = False
 
             for j, data in enumerate(trainloader, 0):
                 model.train()
@@ -145,8 +146,8 @@ class TCN_Trainer(nn.Module):
                         if(np.isnan(val_loss.item())):
                             #print("Noped out in validation at", epoch, j, kl, rec_comps)
                             print("Nan in Validation at ", epoch)
-                            #flag = True
-                            #break
+                            flag = True
+                            break
 
                         if self.es_val.step(val_loss):
                             early_stopped_val=True
@@ -176,4 +177,3 @@ class TCN_Trainer(nn.Module):
         else:
             plt.savefig(save_dir + str(self.model_type) + str(machine_name))
         plt.show()
-
