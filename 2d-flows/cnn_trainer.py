@@ -11,7 +11,7 @@ import torchvision
 from torchvision import transforms
 import torch.optim as optim
 from torch import nn
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 from torchsummary import summary
 from torchvision import datasets
 from torchvision import transforms

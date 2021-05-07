@@ -227,7 +227,7 @@ class CNN_VAE(nn.Module):
 
         elif self.flow_type =='BNAF':
             num_flows = 1
-            num_layers = 2
+            num_layers = 1
             n_dims = self.latent_dim
             hidden_dim = 100
             residual = None
